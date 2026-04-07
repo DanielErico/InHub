@@ -29,7 +29,7 @@ import {
 import { courses } from "../../data/mockData";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { chatCompletion, streamCompletion, MODELS, PROMPTS, type ChatMessage } from "../../services/nvidia";
-
+import { courseService } from "../../../services/courseService";
 const quickPrompts = [
   "Explain this lesson simply",
   "Summarize this topic",
@@ -109,12 +109,47 @@ function AIChatMessage({ msg }: { msg: { id: string; role: string; content: stri
 export default function CoursePlayerPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const course = courses.find((c) => c.id === id) || courses[0];
+  
+  const [course, setCourse] = useState<any>(null);
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [resources, setResources] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [isPlaying, setIsPlaying] = useState(false);
-  const [activeLesson, setActiveLesson] = useState(course.lessons.find((l) => l.active) || course.lessons[0]);
-  const [activeTab, setActiveTab] = useState<"notes" | "chapters">("notes");
+  const [activeLesson, setActiveLesson] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"notes" | "chapters" | "resources">("notes");
   const [sidebarTab, setSidebarTab] = useState<"chat" | "lessons">("chat");
+
+  useEffect(() => {
+    async function loadCourse() {
+      if (!id) return;
+      setLoading(true);
+      try {
+        // Fallback for mock routes
+        if (!id.includes('-')) {
+           const mockCourse = courses.find((c) => c.id === id) || courses[0];
+           setCourse(mockCourse);
+           setLessons(mockCourse.lessons);
+           setActiveLesson(mockCourse.lessons[0]);
+           return;
+        }
+
+        const courseData = await courseService.getCourseById(id);
+        const lessonsData = await courseService.getLessons(id);
+        const resourcesData = await courseService.getResources(id);
+
+        setCourse({ ...courseData, aiChapters: [] });
+        setLessons(lessonsData);
+        setResources(resourcesData);
+        if (lessonsData.length > 0) setActiveLesson(lessonsData[0]);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadCourse();
+  }, [id]);
 
   // AI Notes state
   const [notesContent, setNotesContent] = useState("");
@@ -127,7 +162,7 @@ export default function CoursePlayerPage() {
     {
       id: "m1",
       role: "assistant",
-      content: `Hi! I'm your AI Course Assistant for **${course.title}**. I've been trained on all the course materials — ask me anything about the lessons!`,
+      content: `Hi! I'm your AI Course Assistant. I've been trained on all the course materials — ask me anything about the lessons!`,
     },
   ]);
   const [chatInput, setChatInput] = useState("");
@@ -140,9 +175,10 @@ export default function CoursePlayerPage() {
 
   // Reset notes when switching lessons
   useEffect(() => {
+    if (!activeLesson) return;
     setNotesContent("");
     setNotesError(null);
-  }, [activeLesson.id]);
+  }, [activeLesson?.id]);
 
   // Scroll chat on new messages
   useEffect(() => {
@@ -243,7 +279,12 @@ export default function CoursePlayerPage() {
   const tabs = [
     { id: "notes", icon: FileText, label: "AI Notes" },
     { id: "chapters", icon: List, label: "Chapters" },
+    { id: "resources", icon: Download, label: "Resources" },
   ];
+
+  if (loading) return <div className="p-20 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="animate-spin w-5 h-5"/> Loading course...</div>;
+  if (!course) return <div className="p-20 text-center text-muted-foreground">Course not found.</div>;
+  if (!activeLesson) return <div className="p-20 text-center text-muted-foreground">No lessons available for this course yet! Tell the tutor to upload one.</div>;
 
   return (
     <div className="flex flex-col lg:flex-row h-full">
@@ -266,16 +307,25 @@ export default function CoursePlayerPage() {
         {/* Video Player */}
         <div className="relative bg-slate-950 flex-shrink-0 flex justify-center border-b border-slate-800">
           <div className="w-full max-w-3xl xl:max-w-4xl aspect-video relative overflow-hidden">
-            <ImageWithFallback
-              src={course.thumbnail}
-              alt={course.title}
-              className="w-full h-full object-cover opacity-60"
-            />
-            <div className="absolute inset-0 flex flex-col justify-between p-4 sm:p-6">
+            {activeLesson.video_url ? (
+              <video 
+                src={activeLesson.video_url} 
+                className="w-full h-full object-cover" 
+                controls 
+                autoPlay 
+              />
+            ) : (
+              <ImageWithFallback
+                src={course.thumbnail_url || course.thumbnail}
+                alt={course.title}
+                className="w-full h-full object-cover opacity-60"
+              />
+            )}
+            <div className={`absolute inset-0 flex flex-col justify-between p-4 sm:p-6 ${activeLesson.video_url ? 'pointer-events-none opacity-0 hover:opacity-100 transition-opacity' : ''}`}>
               <div className="flex items-center justify-between">
                 <div className="bg-black/40 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
                   <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  <span className="text-white text-xs font-medium">LESSON {course.lessons.indexOf(activeLesson) + 1}</span>
+                  <span className="text-white text-xs font-medium">LESSON {lessons.indexOf(activeLesson) + 1}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
@@ -306,22 +356,22 @@ export default function CoursePlayerPage() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => {
-                        const idx = course.lessons.indexOf(activeLesson);
-                        if (idx > 0) setActiveLesson(course.lessons[idx - 1]);
+                        const idx = lessons.indexOf(activeLesson);
+                        if (idx > 0) setActiveLesson(lessons[idx - 1]);
                       }}
-                      className="p-1.5 text-white/80 hover:text-white transition-colors"
+                      className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
                     >
                       <SkipBack className="w-5 h-5" />
                     </button>
-                    <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 text-white/80 hover:text-white transition-colors">
+                    <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto">
                       {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
                     </button>
                     <button
                       onClick={() => {
-                        const idx = course.lessons.indexOf(activeLesson);
-                        if (idx < course.lessons.length - 1) setActiveLesson(course.lessons[idx + 1]);
+                        const idx = lessons.indexOf(activeLesson);
+                        if (idx < lessons.length - 1) setActiveLesson(lessons[idx + 1]);
                       }}
-                      className="p-1.5 text-white/80 hover:text-white transition-colors"
+                      className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
                     >
                       <SkipForward className="w-5 h-5" />
                     </button>
@@ -502,6 +552,49 @@ export default function CoursePlayerPage() {
               </div>
             </div>
           )}
+          {/* ============ RESOURCES TAB ============ */}
+          {activeTab === "resources" as any && (
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 bg-blue-700 rounded-lg flex items-center justify-center">
+                  <Download className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-foreground text-sm font-semibold">Course Resources</h3>
+                  <p className="text-muted-foreground/80 text-xs">PDFs and downloadable content</p>
+                </div>
+              </div>
+              
+              {resources.length === 0 ? (
+                <div className="bg-card rounded-2xl border border-dashed border-border p-12 text-center">
+                  <FileText className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                  <p className="text-muted-foreground text-sm">No resources available for this course.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {resources.map((res) => (
+                    <a 
+                      href={res.file_url} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      key={res.id} 
+                      className="bg-card rounded-xl border border-border p-4 flex items-start gap-4 hover:border-blue-500 hover:shadow-md transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-5 h-5 text-rose-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-foreground group-hover:text-blue-700 transition-colors mb-1">{res.title}</p>
+                        <p className="text-xs text-muted-foreground uppercase flex items-center gap-1.5">
+                          <Download className="w-3 h-3" /> Download {res.file_type}
+                        </p>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -534,14 +627,14 @@ export default function CoursePlayerPage() {
             <div className="px-5 py-4 border-b border-border flex-shrink-0 bg-card">
               <h3 className="text-foreground font-semibold text-sm mb-1">Course Content</h3>
               <p className="text-muted-foreground/80 text-xs">
-                {course.completedLessons}/{course.totalLessons} lessons completed
+                {lessons.length} lessons available
               </p>
               <div className="mt-3 bg-muted rounded-full h-1.5">
-                <div className="bg-blue-700 h-1.5 rounded-full" style={{ width: `${course.progress}%` }} />
+                <div className="bg-blue-700 h-1.5 rounded-full" style={{ width: `0%` }} />
               </div>
             </div>
             <div className="flex-1 overflow-y-auto">
-              {course.lessons.map((lesson, i) => {
+              {lessons.map((lesson, i) => {
                 const isActive = lesson.id === activeLesson.id;
                 return (
                   <div
