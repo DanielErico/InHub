@@ -15,7 +15,7 @@ import {
 import { courses, scheduleItems, assignments } from "../../data/mockData";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { courseService } from "../../../services/courseService";
-import { supabase } from "../../../services/supabase";
+import { supabase } from "../../../lib/supabase";
 
 function CircularProgress({ percentage, size = 88 }: { percentage: number; size?: number }) {
   const radius = size / 2 - 8;
