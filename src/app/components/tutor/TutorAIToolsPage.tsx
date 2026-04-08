@@ -296,7 +296,7 @@ export default function TutorAIToolsPage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in duration-500 overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -319,7 +319,7 @@ export default function TutorAIToolsPage() {
       </div>
 
       {/* Tool Selector Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {tools.map((tool) => {
           const isActive = activeTool === tool.id;
           return (
@@ -353,9 +353,9 @@ export default function TutorAIToolsPage() {
 
       {/* Active Tool Content */}
       {activeTool && (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
           {/* Input Form */}
-          <div className="lg:col-span-2">
+          <div className="xl:col-span-2">
             <div className="bg-card rounded-2xl border border-border shadow-sm p-6 space-y-5 sticky top-8">
               <h2 className="text-lg font-bold text-foreground">
                 {tools.find((t) => t.id === activeTool)?.title} Settings
@@ -482,7 +482,7 @@ export default function TutorAIToolsPage() {
           </div>
 
           {/* Output Panel */}
-          <div className="lg:col-span-3">
+          <div className="xl:col-span-3">
             {/* Error */}
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-6 flex items-start gap-3">
