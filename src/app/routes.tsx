@@ -14,6 +14,7 @@ import TutorStudentsPage from "./components/tutor/TutorStudentsPage";
 import TutorSchedulePage from "./components/tutor/TutorSchedulePage";
 import TutorSettingsPage from "./components/tutor/TutorSettingsPage";
 import TutorAIToolsPage from "./components/tutor/TutorAIToolsPage";
+import TutorCourseDetailsPage from "./components/tutor/TutorCourseDetailsPage";
 
 export const router = createBrowserRouter([
   {
@@ -69,6 +70,10 @@ export const router = createBrowserRouter([
       {
         path: "content",
         Component: TutorContentPage,
+      },
+      {
+        path: "content/:courseId",
+        Component: TutorCourseDetailsPage,
       },
       {
         path: "students",

@@ -21,6 +21,7 @@ import {
   Loader2,
   Video
 } from "lucide-react";
+import { useNavigate } from "react-router";
 import { courseService, Course } from "../../../services/courseService";
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -42,6 +43,7 @@ export default function TutorContentPage() {
   const [activeFilter, setActiveFilter] = useState("All");
   const [showUploadModal, setShowUploadModal] = useState<UploadType>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   // Form State
   const [uploadTitle, setUploadTitle] = useState("");
@@ -203,7 +205,11 @@ export default function TutorContentPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filtered.map((course) => (
-            <div key={course.id} className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:shadow-md hover:border-border transition-all group">
+            <div 
+              key={course.id} 
+              onClick={() => navigate(`/app/tutor/content/${course.id}`)}
+              className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden hover:shadow-md hover:border-border transition-all group cursor-pointer"
+            >
               {/* Thumbnail */}
               <div className="relative h-40 overflow-hidden bg-slate-100 flex items-center justify-center">
                 {course.thumbnail_url ? (
@@ -222,20 +228,32 @@ export default function TutorContentPage() {
                 {/* Menu */}
                 <div className="absolute top-3 right-3">
                   <button
-                    onClick={() => setOpenMenu(openMenu === course.id ? null : course.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenMenu(openMenu === course.id ? null : course.id);
+                    }}
                     className="p-1.5 bg-card/90 backdrop-blur-sm rounded-lg hover:bg-card transition-colors"
                   >
                     <MoreVertical className="w-4 h-4 text-muted-foreground" />
                   </button>
                   {openMenu === course.id && (
                     <div className="absolute right-0 mt-1 w-40 bg-card rounded-xl shadow-lg border border-border z-10 overflow-hidden">
-                      <button className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors">
-                        <Eye className="w-4 h-4 text-muted-foreground/80" /> Preview
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); navigate(`/app/tutor/content/${course.id}`); }}
+                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors"
+                      >
+                        <Eye className="w-4 h-4 text-muted-foreground/80" /> Manage Content
                       </button>
-                      <button className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); navigate(`/app/tutor/content/${course.id}`); }}
+                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors"
+                      >
                         <Edit3 className="w-4 h-4 text-blue-500" /> Edit
                       </button>
-                      <button className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                      <button 
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                      >
                         <Trash2 className="w-4 h-4" /> Delete
                       </button>
                     </div>

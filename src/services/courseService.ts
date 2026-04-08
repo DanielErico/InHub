@@ -152,6 +152,11 @@ export const courseService = {
     return data as Lesson;
   },
 
+  async deleteLesson(id: string) {
+    const { error } = await supabase.from('lessons').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   // === Resources / PDFs === //
 
   async getResources(courseId: string) {
@@ -190,5 +195,10 @@ export const courseService = {
 
     if (error) throw error;
     return data as Resource;
+  },
+
+  async deleteResource(id: string) {
+    const { error } = await supabase.from('resources').delete().eq('id', id);
+    if (error) throw error;
   }
 };
