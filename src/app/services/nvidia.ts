@@ -224,9 +224,9 @@ For each week, provide:
 Make it practical, progressive (build on previous weeks), and industry-relevant.`,
 
   /** Tutor: Generate structured quiz questions for CBT */
-  quizGenerator: (topic: string, difficulty: string, count: number) =>
+  quizGenerator: (topic: string, difficulty: string, count: number, customContext?: string) =>
     `You are an expert educator. Generate ${count} multiple-choice quiz questions about "${topic}" at a ${difficulty} difficulty level.
-
+${customContext ? `\nBASE YOUR QUESTIONS STRICTLY ON THIS PROVIDED MATERIAL:\n\n${customContext}\n\n` : ""}
 CRITICAL: You MUST output ONLY valid JSON without any markdown code blocks, backticks, or conversational text. Your entire response must be a JSON array of objects EXACTLY in this format:
 [
   {

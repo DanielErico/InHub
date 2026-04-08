@@ -22,8 +22,10 @@ import {
   Calendar,
   Trash2
 } from "lucide-react";
-import { chatCompletion, streamCompletion, MODELS, PROMPTS } from "../../services/nvidia";
+import { chatCompletion, streamCompletion, MODELS, PROMPTS, ChatMessage } from "../../services/nvidia";
 import { cbtService, SavedCurriculum } from "../../../services/cbtService";
+import { courseService } from "../../../services/courseService";
+import { extractPdfText, extractVideoFrames } from "../../utils/mediaExtractor";
 
 // Markdown renderer with nice styling
 function MarkdownContent({ content }: { content: string }) {
@@ -135,9 +137,21 @@ export default function TutorAIToolsPage() {
   const [currWeeks, setCurrWeeks] = useState(4);
 
   // Quiz form
+  const [quizMode, setQuizMode] = useState<"custom" | "course">("custom");
   const [quizTopic, setQuizTopic] = useState("");
   const [quizDifficulty, setQuizDifficulty] = useState("intermediate");
   const [quizCount, setQuizCount] = useState(5);
+  
+  // Quiz Course state
+  const [publishedCourses, setPublishedCourses] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [extractionStatus, setExtractionStatus] = useState("");
+
+  useEffect(() => {
+     if (activeTool === "quiz" && quizMode === "course" && publishedCourses.length === 0) {
+        courseService.getAllPublishedCourses().then(data => setPublishedCourses(data || []));
+     }
+  }, [activeTool, quizMode]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(output);
@@ -176,16 +190,71 @@ export default function TutorAIToolsPage() {
   }, [currTopic, currAudience, currWeeks]);
 
   const generateQuiz = useCallback(async () => {
-    if (!quizTopic.trim()) return;
+    if (quizMode === "custom" && !quizTopic.trim()) return;
+    if (quizMode === "course" && !selectedCourseId) return;
+    
     setIsGenerating(true);
     setError(null);
     setOutput("");
+    setExtractionStatus("");
 
     try {
+      let customContext = "";
+      let base64Frames: string[] = [];
+      let finalTopic = quizTopic;
+
+      if (quizMode === "course") {
+         const courseInfo = publishedCourses.find(c => c.id === selectedCourseId);
+         finalTopic = courseInfo ? courseInfo.title : "Course Subject";
+         
+         setExtractionStatus("Fetching course materials...");
+         const resources = await courseService.getResources(selectedCourseId);
+         const lessons = await courseService.getLessons(selectedCourseId);
+         
+         setExtractionStatus(`Reading ${resources.length} PDF(s)...`);
+         let combinedText = "";
+         for (const res of resources) {
+             if (res.file_type === 'pdf' || res.file_type === 'PDF') {
+                 const text = await extractPdfText(res.file_url);
+                 combinedText += `\n--- Resource: ${res.title} ---\n${text}\n`;
+             }
+         }
+         customContext = combinedText.substring(0, 30000); // safety limit
+         
+         setExtractionStatus(`Watching ${lessons.length} video(s)...`);
+         for (const lesson of lessons) {
+             if (lesson.video_url) {
+                 const frames = await extractVideoFrames(lesson.video_url, 4);
+                 base64Frames.push(...frames);
+             }
+         }
+         setExtractionStatus("");
+      }
+
+      const promptText = PROMPTS.quizGenerator(finalTopic, quizDifficulty, quizCount, customContext);
+      
+      const messages: ChatMessage[] = [];
+      if (base64Frames.length > 0) {
+         messages.push({
+           role: "user",
+           content: [
+             { type: "text", text: promptText },
+             ...base64Frames.map(frame => ({ type: "image_url", image_url: { url: frame } }))
+           ]
+         });
+      } else {
+         messages.push({ role: "user", content: promptText });
+      }
+
       const stream = streamCompletion(
-        [{ role: "user", content: PROMPTS.quizGenerator(quizTopic, quizDifficulty, quizCount) }],
-        { model: MODELS.NANO, temperature: 0.6, maxTokens: 3072 }
+        messages,
+        { 
+           model: base64Frames.length > 0 ? MODELS.VISION : MODELS.NANO, 
+           temperature: 0.6, 
+           maxTokens: 3072 
+        }
       );
+      
       for await (const chunk of stream) {
         setOutput((prev) => prev + chunk);
       }
@@ -202,8 +271,9 @@ export default function TutorAIToolsPage() {
       setError(err.message || "Failed to generate quiz.");
     } finally {
       setIsGenerating(false);
+      setExtractionStatus("");
     }
-  }, [quizTopic, quizDifficulty, quizCount]);
+  }, [quizTopic, quizDifficulty, quizCount, quizMode, selectedCourseId, publishedCourses]);
 
   const handleSaveCurriculum = async () => {
     if (!output) return;
@@ -407,13 +477,55 @@ export default function TutorAIToolsPage() {
               {activeTool === "quiz" && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-foreground/80 mb-1.5">Quiz Topic</label>
-                    <input
-                      value={quizTopic}
-                      onChange={(e) => setQuizTopic(e.target.value)}
-                      placeholder="e.g., React Hooks and State Management"
-                      className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none"
-                    />
+                    <label className="block text-sm font-medium text-foreground/80 mb-1.5">Generation Source</label>
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      <button
+                        onClick={() => setQuizMode("custom")}
+                        className={`py-2 rounded-xl border text-sm font-medium transition-all ${
+                          quizMode === "custom"
+                            ? "bg-blue-700 bg-opacity-10 border-blue-700 text-blue-800"
+                            : "bg-card border-border text-muted-foreground hover:border-blue-300"
+                        }`}
+                      >
+                        Custom Topic
+                      </button>
+                      <button
+                        onClick={() => setQuizMode("course")}
+                        className={`py-2 rounded-xl border text-sm font-medium transition-all ${
+                          quizMode === "course"
+                            ? "bg-blue-700 bg-opacity-10 border-blue-700 text-blue-800"
+                            : "bg-card border-border text-muted-foreground hover:border-blue-300"
+                        }`}
+                      >
+                        Existing Course
+                      </button>
+                    </div>
+
+                    {quizMode === "custom" ? (
+                      <>
+                        <label className="block text-sm font-medium text-foreground/80 mb-1.5">Quiz Topic</label>
+                        <input
+                          value={quizTopic}
+                          onChange={(e) => setQuizTopic(e.target.value)}
+                          placeholder="e.g., React Hooks and State Management"
+                          className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <label className="block text-sm font-medium text-foreground/80 mb-1.5">Select Published Course</label>
+                        <select
+                          value={selectedCourseId}
+                          onChange={(e) => setSelectedCourseId(e.target.value)}
+                          className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none bg-card"
+                        >
+                          <option value="">-- Choose a course --</option>
+                          {publishedCourses.map(course => (
+                            <option key={course.id} value={course.id}>{course.title}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-foreground/80 mb-1.5">Difficulty Level</label>
@@ -466,10 +578,10 @@ export default function TutorAIToolsPage() {
                 disabled={isGenerating || !isFormValid()}
                 className="w-full flex items-center justify-center gap-2.5 bg-gradient-to-r from-blue-700 to-indigo-700 text-white py-3 rounded-xl text-sm font-semibold hover:from-blue-800 hover:to-indigo-800 transition-all disabled:opacity-50 shadow-lg shadow-blue-200"
               >
-                {isGenerating ? (
+                {isGenerating || extractionStatus ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Generating...
+                    {extractionStatus || "Generating..."}
                   </>
                 ) : (
                   <>
