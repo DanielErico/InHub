@@ -223,26 +223,21 @@ For each week, provide:
 
 Make it practical, progressive (build on previous weeks), and industry-relevant.`,
 
-  /** Tutor: Generate quiz questions */
+  /** Tutor: Generate structured quiz questions for CBT */
   quizGenerator: (topic: string, difficulty: string, count: number) =>
     `You are an expert educator. Generate ${count} multiple-choice quiz questions about "${topic}" at a ${difficulty} difficulty level.
 
-For each question, use this exact format:
+CRITICAL: You MUST output ONLY valid JSON without any markdown code blocks, backticks, or conversational text. Your entire response must be a JSON array of objects EXACTLY in this format:
+[
+  {
+    "question": "Question text here",
+    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+    "correctAnswer": "Option A text",
+    "explanation": "Short explanation of why this is correct"
+  }
+]
 
-### Question [N]
-[Question text]
-
-**A)** [Option A]
-**B)** [Option B]
-**C)** [Option C]
-**D)** [Option D]
-
-**Correct Answer:** [Letter]
-**Explanation:** [1-2 sentence explanation of why this is correct]
-
----
-
-Make questions that test understanding, not just memorization. Include real-world scenarios where possible.`,
+Note: The correctAnswer must be an exact string match to one of the strings in the options array. Make questions that test understanding.`,
 
   /** Tutor: Analyze student performance */
   studentInsights: (studentsData: string) =>

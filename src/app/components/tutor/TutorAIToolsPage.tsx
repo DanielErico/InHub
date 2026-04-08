@@ -14,8 +14,11 @@ import {
   Wand2,
   RotateCcw,
   Users,
+  Save,
+  Send
 } from "lucide-react";
 import { chatCompletion, streamCompletion, MODELS, PROMPTS } from "../../services/nvidia";
+import { cbtService } from "../../../services/cbtService";
 
 // Markdown renderer with nice styling
 function MarkdownContent({ content }: { content: string }) {
@@ -113,6 +116,7 @@ export default function TutorAIToolsPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [savingAction, setSavingAction] = useState(false);
 
   // Curriculum form
   const [currTopic, setCurrTopic] = useState("");
@@ -144,6 +148,15 @@ export default function TutorAIToolsPage() {
       for await (const chunk of stream) {
         setOutput((prev) => prev + chunk);
       }
+      
+      // Cleanup any markdown codeblock backticks if Llama hallucinated them
+      setOutput((prev) => {
+        let cleaned = prev.trim();
+        if (cleaned.startsWith("```json")) cleaned = cleaned.replace("```json", "");
+        if (cleaned.startsWith("```")) cleaned = cleaned.replace("```", "");
+        if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
+        return cleaned.trim();
+      });
     } catch (err: any) {
       setError(err.message || "Failed to generate curriculum.");
     } finally {
@@ -165,12 +178,48 @@ export default function TutorAIToolsPage() {
       for await (const chunk of stream) {
         setOutput((prev) => prev + chunk);
       }
+      
+      // Cleanup any markdown codeblock backticks to ensure valid JSON string
+      setOutput((prev) => {
+        let cleaned = prev.trim();
+        if (cleaned.startsWith("```json")) cleaned = cleaned.replace("```json", "");
+        if (cleaned.startsWith("```")) cleaned = cleaned.replace("```", "");
+        if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
+        return cleaned.trim();
+      });
     } catch (err: any) {
       setError(err.message || "Failed to generate quiz.");
     } finally {
       setIsGenerating(false);
     }
   }, [quizTopic, quizDifficulty, quizCount]);
+
+  const handleSaveCurriculum = async () => {
+    if (!output) return;
+    try {
+      setSavingAction(true);
+      await cbtService.saveCurriculum(currTopic, output);
+      alert("Curriculum saved successfully to your library!");
+    } catch (err: any) {
+      alert("Failed to save curriculum: " + err.message);
+    } finally {
+      setSavingAction(false);
+    }
+  };
+
+  const handlePublishQuiz = async () => {
+    if (!output) return;
+    try {
+      setSavingAction(true);
+      const questionsData = JSON.parse(output);
+      await cbtService.publishQuiz(quizTopic, questionsData);
+      alert("Quiz successfully published as an assignment!");
+    } catch (err: any) {
+      alert("Failed to publish quiz. Ensure the AI finished generating correctly: " + err.message);
+    } finally {
+      setSavingAction(false);
+    }
+  };
 
   const generateInsights = useCallback(async () => {
     setIsGenerating(true);
@@ -463,6 +512,27 @@ export default function TutorAIToolsPage() {
                           {copied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                           {copied ? "Copied!" : "Copy"}
                         </button>
+                        
+                        {activeTool === "curriculum" && (
+                          <button
+                            onClick={handleSaveCurriculum}
+                            disabled={savingAction}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-medium hover:bg-blue-800 transition-colors shadow-sm disabled:opacity-70"
+                          >
+                            {savingAction ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                            Save
+                          </button>
+                        )}
+                        {activeTool === "quiz" && (
+                          <button
+                            onClick={handlePublishQuiz}
+                            disabled={savingAction}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 text-white text-xs font-medium hover:bg-purple-800 transition-colors shadow-sm disabled:opacity-70"
+                          >
+                            {savingAction ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                            Publish Assignment
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -470,7 +540,40 @@ export default function TutorAIToolsPage() {
 
                 {/* Content */}
                 <div className="p-6">
-                  <MarkdownContent content={output} />
+                  {activeTool === "quiz" && !isGenerating ? (
+                    <div className="space-y-6">
+                      {(() => {
+                        try {
+                          const parsed = JSON.parse(output);
+                          return parsed.map((item: any, i: number) => (
+                            <div key={i} className="bg-slate-50 border border-slate-200 p-5 rounded-xl">
+                              <h4 className="font-semibold text-foreground mb-3">{i+1}. {item.question}</h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                                {item.options.map((opt: string, j: number) => (
+                                  <div key={j} className="bg-white border border-slate-200 px-4 py-2.5 rounded-lg text-sm text-foreground/80">
+                                    {String.fromCharCode(65 + j)}) {opt}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="text-xs space-y-1">
+                                <p><span className="font-bold text-emerald-700">Correct:</span> {item.correctAnswer}</p>
+                                <p className="text-muted-foreground">{item.explanation}</p>
+                              </div>
+                            </div>
+                          ));
+                        } catch (e) {
+                          return (
+                            <div>
+                               <p className="text-red-500 mb-4 text-sm font-medium">Failed to parse JSON properly. Formatting raw output:</p>
+                               <MarkdownContent content={output} />
+                            </div>
+                          );
+                        }
+                      })()}
+                    </div>
+                  ) : (
+                    <MarkdownContent content={output} />
+                  )}
                   {isGenerating && (
                     <span className="inline-block w-2 h-4 bg-blue-600 animate-pulse rounded-sm ml-1" />
                   )}
