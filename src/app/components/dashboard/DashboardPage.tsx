@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   TrendingUp,
@@ -12,8 +12,10 @@ import {
   Zap,
   ChevronRight,
 } from "lucide-react";
-import { courses, scheduleItems, user, assignments } from "../../data/mockData";
+import { courses, scheduleItems, assignments } from "../../data/mockData";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
+import { courseService } from "../../../services/courseService";
+import { supabase } from "../../../services/supabase";
 
 function CircularProgress({ percentage, size = 88 }: { percentage: number; size?: number }) {
   const radius = size / 2 - 8;
@@ -67,10 +69,38 @@ const progressColors: Record<string, string> = {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const activeCourses = courses.filter((c) => c.progress > 0 && c.progress < 100);
+  const [publishedCourses, setPublishedCourses] = useState<any[]>([]);
+  const [activeUser, setActiveUser] = useState({ firstName: 'Student', streak: 4 });
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const { data } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', authUser.id)
+            .single();
+          if (data) {
+            setActiveUser(prev => ({ ...prev, firstName: data.full_name?.split(' ')[0] || 'Student' }));
+          }
+        }
+        
+        // Fetch real active courses created by tutors
+        const coursesData = await courseService.getAllPublishedCourses();
+        setPublishedCourses(coursesData || []);
+      } catch (error) {
+        console.error("Dashboard error:", error);
+      }
+    }
+    loadDashboard();
+  }, []);
+
+  const activeCourses = publishedCourses;
   const pendingAssignments = assignments.filter((a) => a.status === "pending");
   const nextSession = scheduleItems[0];
-  const overallProgress = Math.round(courses.reduce((acc, c) => acc + c.progress, 0) / courses.length);
+  const overallProgress = 0;
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -78,10 +108,10 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl text-foreground mb-1">
-            Welcome back, {user.firstName}! 👋
+            Welcome back, {activeUser.firstName}! 👋
           </h1>
           <p className="text-muted-foreground text-sm">
-            You're on a <span className="text-amber-500 font-semibold">{user.streak}-day streak</span> — keep it up!
+            You're on a <span className="text-amber-500 font-semibold">{activeUser.streak}-day streak</span> — keep it up!
           </p>
         </div>
         <button
@@ -123,7 +153,7 @@ export default function DashboardPage() {
             </div>
             <span className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full font-medium">🔥</span>
           </div>
-          <p className="text-2xl text-foreground mb-0.5">{user.streak}</p>
+          <p className="text-2xl text-foreground mb-0.5">{activeUser.streak}</p>
           <p className="text-muted-foreground text-xs">Day Streak</p>
         </div>
 
@@ -153,8 +183,8 @@ export default function DashboardPage() {
                   You've completed <strong>{overallProgress}%</strong> of your enrolled curriculum
                 </p>
                 <div className="flex items-center gap-4 text-xs text-blue-400">
-                  <span>✅ {courses.reduce((acc, c) => acc + c.completedLessons, 0)} lessons done</span>
-                  <span>📚 {courses.reduce((acc, c) => acc + c.totalLessons - c.completedLessons, 0)} remaining</span>
+                  <span>✅ {0} lessons done</span>
+                  <span>📚 {publishedCourses.length} courses available</span>
                 </div>
               </div>
             </div>
@@ -172,19 +202,23 @@ export default function DashboardPage() {
               </button>
             </div>
             <div className="space-y-3">
-              {courses.slice(0, 3).map((course) => (
+              {publishedCourses.slice(0, 3).map((course) => (
                 <div
                   key={course.id}
                   className="bg-card rounded-2xl p-4 shadow-sm border border-border hover:shadow-md transition-all duration-200 cursor-pointer group"
                   onClick={() => navigate(`/app/course/${course.id}`)}
                 >
                   <div className="flex gap-4">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
-                      <ImageWithFallback
-                        src={course.thumbnail}
-                        alt={course.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
+                    <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 flex items-center justify-center">
+                      {course.thumbnail_url ? (
+                        <ImageWithFallback
+                          src={course.thumbnail_url}
+                          alt={course.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <BookOpen className="w-8 h-8 text-slate-300" />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-1">
@@ -193,20 +227,25 @@ export default function DashboardPage() {
                           {course.category}
                         </span>
                       </div>
-                      <p className="text-muted-foreground text-xs mb-2">{course.tutor}</p>
+                      <p className="text-muted-foreground text-xs mb-2">{course.users?.full_name || "Tutor"}</p>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 bg-muted rounded-full h-1.5">
                           <div
                             className={`h-1.5 rounded-full transition-all ${progressColors[course.category] || "bg-blue-700"}`}
-                            style={{ width: `${course.progress}%` }}
+                            style={{ width: `0%` }}
                           />
                         </div>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">{course.progress}%</span>
+                        <span className="text-xs text-muted-foreground flex-shrink-0">0%</span>
                       </div>
                     </div>
                   </div>
                 </div>
               ))}
+              {publishedCourses.length === 0 && (
+                <div className="text-sm text-muted-foreground p-4 text-center border border-dashed border-border rounded-xl">
+                  No published courses available yet.
+                </div>
+              )}
             </div>
           </div>
         </div>
