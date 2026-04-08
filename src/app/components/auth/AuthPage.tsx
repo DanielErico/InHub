@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap } from "lucide-react";
+import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap, AlertCircle } from "lucide-react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { Logo } from "../ui/Logo";
+import { supabase } from "../../../lib/supabase";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -14,19 +15,102 @@ export default function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      if (role === "tutor") {
-        navigate("/app/tutor/dashboard");
+
+    try {
+      if (mode === "signup") {
+        if (password !== confirmPassword) {
+          setError("Passwords do not match");
+          setIsLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError("Password must be at least 6 characters");
+          setIsLoading(false);
+          return;
+        }
+
+        // Sign up with Supabase
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+              role: role,
+            },
+          },
+        });
+
+        if (signUpError) throw signUpError;
+
+        // Insert into our users table
+        if (data.user) {
+          await supabase.from("users").upsert({
+            id: data.user.id,
+            full_name: name,
+            role: role,
+          });
+        }
+
+        // Navigate based on role
+        if (role === "tutor") {
+          navigate("/app/tutor/dashboard");
+        } else {
+          navigate("/app/dashboard");
+        }
       } else {
-        navigate("/app/dashboard");
+        // Login
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError) throw signInError;
+
+        // Get the user's role from our users table
+        if (data.user) {
+          const { data: profile } = await supabase
+            .from("users")
+            .select("role")
+            .eq("id", data.user.id)
+            .single();
+
+          const userRole = profile?.role || role;
+          if (userRole === "tutor") {
+            navigate("/app/tutor/dashboard");
+          } else {
+            navigate("/app/dashboard");
+          }
+        }
       }
-    }, 1200);
+    } catch (err: any) {
+      console.error("Auth error:", err);
+      setError(err.message || "Authentication failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/app/dashboard`,
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setError(err.message || "Google login failed.");
+    }
   };
 
   const features = [
@@ -123,6 +207,14 @@ export default function AuthPage() {
             </p>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+
           {/* Role Toggle */}
           <div className="flex bg-muted rounded-xl p-1 mb-6">
             <button
@@ -151,7 +243,10 @@ export default function AuthPage() {
 
           {/* Social Login */}
           <div className="space-y-3 mb-6">
-            <button className="w-full flex items-center justify-center gap-3 border border-border rounded-xl py-3 text-sm text-foreground/80 hover:bg-muted/50 hover:border-slate-300 transition-all duration-200 group">
+            <button 
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-3 border border-border rounded-xl py-3 text-sm text-foreground/80 hover:bg-muted/50 hover:border-slate-300 transition-all duration-200 group"
+            >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -159,12 +254,6 @@ export default function AuthPage() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
               Continue with Google
-            </button>
-            <button className="w-full flex items-center justify-center gap-3 border border-border rounded-xl py-3 text-sm text-foreground/80 hover:bg-muted/50 hover:border-slate-300 transition-all duration-200">
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/>
-              </svg>
-              Continue with Apple
             </button>
           </div>
 
@@ -186,6 +275,7 @@ export default function AuthPage() {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Daniel Okafor"
                   className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                  required
                 />
               </div>
             )}
@@ -197,6 +287,7 @@ export default function AuthPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                required
               />
             </div>
             <div>
@@ -208,6 +299,7 @@ export default function AuthPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="w-full border border-border rounded-xl px-4 py-3 pr-12 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                  required
                 />
                 <button
                   type="button"
@@ -228,6 +320,7 @@ export default function AuthPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
                     className="w-full border border-border rounded-xl px-4 py-3 pr-12 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                    required
                   />
                   <button
                     type="button"
@@ -256,7 +349,7 @@ export default function AuthPage() {
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
+                  {mode === "login" ? "Signing in..." : "Creating account..."}
                 </>
               ) : (
                 <>
@@ -271,7 +364,7 @@ export default function AuthPage() {
           <p className="text-center text-sm text-muted-foreground mt-6">
             {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
             <button
-              onClick={() => setMode(mode === "login" ? "signup" : "login")}
+              onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); }}
               className="text-blue-700 hover:text-blue-800 font-medium transition-colors"
             >
               {mode === "login" ? "Sign Up" : "Sign In"}
@@ -279,9 +372,7 @@ export default function AuthPage() {
           </p>
 
           <p className="text-center text-xs text-muted-foreground/80 mt-4">
-            By continuing, you agree to our{" "}
-            <span className="text-blue-700 cursor-pointer">Terms of Service</span> and{" "}
-            <span className="text-blue-700 cursor-pointer">Privacy Policy</span>
+            Powered by InternConnect
           </p>
         </div>
       </div>

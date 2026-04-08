@@ -33,16 +33,13 @@ export const courseService = {
   // === Courses === //
 
   async getTutorCourses() {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      // Return hardcoded data temporarily if unauthorized, to prevent crash during development
-      return [];
-    }
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
 
     const { data, error } = await supabase
       .from('courses')
       .select('*')
-      .eq('tutor_id', userData.user.id)
+      .eq('tutor_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -52,10 +49,7 @@ export const courseService = {
   async getAllPublishedCourses() {
     const { data, error } = await supabase
       .from('courses')
-      .select(`
-        *,
-        users ( full_name, avatar_url )
-      `)
+      .select('*')
       .eq('status', 'published')
       .order('created_at', { ascending: false });
 
@@ -75,15 +69,14 @@ export const courseService = {
   },
 
   async createCourse(title: string, category: string, file: File | null) {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    // Use a placeholder if user is not authenticated (for demo purposes)
-    const userId = userData.user?.id || '00000000-0000-0000-0000-000000000000';
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('You must be logged in to create a course');
 
     let thumbnailUrl = '';
     
     if (file) {
       const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('course-content')
         .upload(`thumbnails/${fileName}`, file, { cacheControl: '3600', upsert: true });
 
@@ -99,16 +92,16 @@ export const courseService = {
     const { data, error } = await supabase
       .from('courses')
       .insert({
-        tutor_id: userId,
+        tutor_id: user.id,
         title,
         category,
         thumbnail_url: thumbnailUrl,
-        status: 'published', // default for MVP
+        status: 'published',
       })
       .select()
       .single();
 
-    if (error && error.code !== '23503') throw error; // ignore foreign key if fake user
+    if (error) throw error;
     return data as Course;
   },
 
@@ -128,7 +121,7 @@ export const courseService = {
   async uploadVideo(courseId: string, title: string, file: File) {
     const fileName = `${courseId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('course-content')
       .upload(`videos/${fileName}`, file, { cacheControl: '3600', upsert: true });
 
@@ -138,7 +131,6 @@ export const courseService = {
       .from('course-content')
       .getPublicUrl(`videos/${fileName}`);
 
-    // Get current lessons for ordering
     const { count } = await supabase
       .from('lessons')
       .select('*', { count: 'exact', head: true })
@@ -150,7 +142,7 @@ export const courseService = {
         course_id: courseId,
         title,
         video_url: publicUrlData.publicUrl,
-        duration: 'New', // Add logic to parse duration later
+        duration: 'New',
         order_index: count || 0,
       })
       .select()
@@ -175,7 +167,7 @@ export const courseService = {
   async uploadPdf(courseId: string, title: string, file: File) {
     const fileName = `${courseId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('course-content')
       .upload(`pdfs/${fileName}`, file, { cacheControl: '3600', upsert: true });
 
