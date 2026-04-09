@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   User,
   Bell,
@@ -14,8 +14,11 @@ import {
   Lock,
   Globe,
   ChevronRight,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
-import { user } from "../../data/mockData";
+import { supabase } from "../../../lib/supabase";
+import { useUserProfile } from "../../context/UserProfileContext";
 
 const tabs = [
   { id: "profile", label: "Profile", icon: User },
@@ -25,16 +28,24 @@ const tabs = [
 ];
 
 export default function SettingsPage() {
+  const { profile, refetch } = useUserProfile();
   const [activeTab, setActiveTab] = useState("profile");
   const [saved, setSaved] = useState(false);
-  const [profile, setProfile] = useState({
-    name: user.name,
-    email: user.email,
-    bio: "Passionate learner focused on full-stack development and data science. Currently interning at a tech startup.",
-    location: "Lagos, Nigeria",
-    website: "danielokafor.dev",
-    linkedin: "linkedin.com/in/danielokafor",
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [profileForm, setProfileForm] = useState({
+    full_name: "",
+    email: "",
+    bio: "",
+    location: "",
+    website: "",
+    linkedin: "",
   });
+
   const [notifSettings, setNotifSettings] = useState({
     emailDeadlines: true,
     emailSessions: true,
@@ -44,15 +55,114 @@ export default function SettingsPage() {
     pushMessages: true,
     weeklyReport: true,
   });
+
   const [appearance, setAppearance] = useState({
     theme: "light",
     fontSize: "medium",
     language: "English",
   });
 
+  // Populate form from profile when it loads
+  useEffect(() => {
+    if (profile) {
+      setProfileForm((prev) => ({
+        ...prev,
+        full_name: profile.full_name ?? "",
+        email: profile.email ?? "",
+      }));
+      if (profile.avatar_url) {
+        setAvatarPreview(profile.avatar_url);
+      }
+    }
+  }, [profile]);
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile?.id) return;
+
+    // Show local preview immediately
+    const localUrl = URL.createObjectURL(file);
+    setAvatarPreview(localUrl);
+
+    setAvatarUploading(true);
+    setSaveError(null);
+
+    try {
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${profile.id}/avatar.${fileExt}`;
+
+      // Upload to Supabase Storage 'avatars' bucket
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL
+      const { data: urlData } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Update the user's avatar_url in the users table
+      const { error: dbError } = await supabase
+        .from("users")
+        .update({ avatar_url: publicUrl })
+        .eq("id", profile.id);
+
+      if (dbError) throw dbError;
+
+      setAvatarPreview(publicUrl);
+
+      // Refresh the global profile so the Header updates instantly
+      refetch();
+    } catch (err: any) {
+      setSaveError("Failed to upload avatar: " + err.message);
+      // Revert preview on failure
+      setAvatarPreview(profile.avatar_url ?? null);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profile?.id) return;
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({
+          full_name: profileForm.full_name,
+        })
+        .eq("id", profile.id);
+
+      if (error) throw error;
+
+      // Refresh global profile so Header name updates
+      refetch();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err: any) {
+      setSaveError("Failed to save profile: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    if (activeTab === "profile") {
+      handleSaveProfile();
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
   };
 
   const Toggle = ({
@@ -75,6 +185,10 @@ export default function SettingsPage() {
       />
     </button>
   );
+
+  const initials = profile?.full_name
+    ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : (profile?.email?.[0]?.toUpperCase() ?? "U");
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
@@ -118,22 +232,59 @@ export default function SettingsPage() {
               {/* Avatar Section */}
               <div className="px-6 py-6 border-b border-border flex items-center gap-5">
                 <div className="relative">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-                    <span className="text-white text-2xl font-bold">{user.avatar}</span>
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
+
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+                    {avatarPreview ? (
+                      <img
+                        src={avatarPreview}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-white text-2xl font-bold">{initials}</span>
+                    )}
                   </div>
-                  <button className="absolute -bottom-2 -right-2 w-8 h-8 bg-blue-700 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-800 transition-colors">
-                    <Camera className="w-4 h-4 text-white" />
+
+                  <button
+                    onClick={handleAvatarClick}
+                    disabled={avatarUploading}
+                    className="absolute -bottom-2 -right-2 w-8 h-8 bg-blue-700 rounded-full flex items-center justify-center shadow-lg hover:bg-blue-800 transition-colors disabled:opacity-60"
+                  >
+                    {avatarUploading ? (
+                      <Loader2 className="w-4 h-4 text-white animate-spin" />
+                    ) : (
+                      <Camera className="w-4 h-4 text-white" />
+                    )}
                   </button>
                 </div>
                 <div>
-                  <h3 className="text-foreground font-semibold mb-0.5">{user.name}</h3>
-                  <p className="text-muted-foreground/80 text-sm capitalize">{user.role} · Joined {user.joinDate}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">🔥 {user.streak}-day streak</span>
-                    <span className="flex items-center gap-1">⭐ {user.totalPoints} pts</span>
-                  </div>
+                  <h3 className="text-foreground font-semibold mb-0.5">
+                    {profile?.full_name || "Your Name"}
+                  </h3>
+                  <p className="text-muted-foreground/80 text-sm capitalize">
+                    {profile?.role ?? "student"} · {profile?.email}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Click the camera icon to upload a new profile picture
+                  </p>
                 </div>
               </div>
+
+              {/* Error Banner */}
+              {saveError && (
+                <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <p className="text-red-700 text-xs">{saveError}</p>
+                </div>
+              )}
 
               {/* Form */}
               <div className="p-6 space-y-4">
@@ -141,27 +292,30 @@ export default function SettingsPage() {
                   <div>
                     <label className="block text-sm text-foreground/80 mb-1.5">Full Name</label>
                     <input
-                      value={profile.name}
-                      onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                      value={profileForm.full_name}
+                      onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                      placeholder="Enter your full name"
                       className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent"
                     />
                   </div>
                   <div>
                     <label className="block text-sm text-foreground/80 mb-1.5">Email Address</label>
                     <input
-                      value={profile.email}
-                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                      className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent"
+                      value={profileForm.email}
+                      disabled
+                      className="w-full border border-border rounded-xl px-4 py-2.5 text-sm bg-muted/40 text-muted-foreground cursor-not-allowed"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Email cannot be changed here</p>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm text-foreground/80 mb-1.5">Bio</label>
                   <textarea
-                    value={profile.bio}
-                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                    value={profileForm.bio}
+                    onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
                     rows={3}
+                    placeholder="Tell us a bit about yourself..."
                     className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent resize-none"
                   />
                 </div>
@@ -172,8 +326,9 @@ export default function SettingsPage() {
                     <div className="relative">
                       <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/80" />
                       <input
-                        value={profile.location}
-                        onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                        value={profileForm.location}
+                        onChange={(e) => setProfileForm({ ...profileForm, location: e.target.value })}
+                        placeholder="e.g. Lagos, Nigeria"
                         className="w-full border border-border rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent"
                       />
                     </div>
@@ -181,8 +336,9 @@ export default function SettingsPage() {
                   <div>
                     <label className="block text-sm text-foreground/80 mb-1.5">Website</label>
                     <input
-                      value={profile.website}
-                      onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+                      value={profileForm.website}
+                      onChange={(e) => setProfileForm({ ...profileForm, website: e.target.value })}
+                      placeholder="yourwebsite.com"
                       className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent"
                     />
                   </div>
@@ -191,21 +347,28 @@ export default function SettingsPage() {
                 <div>
                   <label className="block text-sm text-foreground/80 mb-1.5">LinkedIn Profile</label>
                   <input
-                    value={profile.linkedin}
-                    onChange={(e) => setProfile({ ...profile, linkedin: e.target.value })}
+                    value={profileForm.linkedin}
+                    onChange={(e) => setProfileForm({ ...profileForm, linkedin: e.target.value })}
+                    placeholder="linkedin.com/in/yourname"
                     className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent"
                   />
                 </div>
 
                 <button
                   onClick={handleSave}
+                  disabled={saving}
                   className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium transition-all ${
                     saved
                       ? "bg-emerald-500 text-white"
                       : "bg-blue-700 text-white hover:bg-blue-800 shadow-lg shadow-blue-200"
-                  }`}
+                  } disabled:opacity-60`}
                 >
-                  {saved ? (
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : saved ? (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
                       Saved!

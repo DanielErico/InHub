@@ -15,7 +15,7 @@ import {
 import { courses, scheduleItems, assignments } from "../../data/mockData";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { courseService } from "../../../services/courseService";
-import { supabase } from "../../../lib/supabase";
+import { useUserProfile } from "../../context/UserProfileContext";
 
 function CircularProgress({ percentage, size = 88 }: { percentage: number; size?: number }) {
   const radius = size / 2 - 8;
@@ -69,25 +69,12 @@ const progressColors: Record<string, string> = {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { profile } = useUserProfile();
   const [publishedCourses, setPublishedCourses] = useState<any[]>([]);
-  const [activeUser, setActiveUser] = useState({ firstName: 'Student', streak: 4 });
 
   useEffect(() => {
     async function loadDashboard() {
       try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
-          const { data } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', authUser.id)
-            .single();
-          if (data) {
-            setActiveUser(prev => ({ ...prev, firstName: data.full_name?.split(' ')[0] || 'Student' }));
-          }
-        }
-        
-        // Fetch real active courses created by tutors
         const coursesData = await courseService.getAllPublishedCourses();
         setPublishedCourses(coursesData || []);
       } catch (error) {
@@ -96,6 +83,8 @@ export default function DashboardPage() {
     }
     loadDashboard();
   }, []);
+
+  const firstName = profile?.full_name?.split(" ")[0] || "there";
 
   const activeCourses = publishedCourses;
   const pendingAssignments = assignments.filter((a) => a.status === "pending");
@@ -108,10 +97,10 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl text-foreground mb-1">
-            Welcome back, {activeUser.firstName}! 👋
+            Welcome back, {firstName}! 👋
           </h1>
           <p className="text-muted-foreground text-sm">
-            You're on a <span className="text-amber-500 font-semibold">{activeUser.streak}-day streak</span> — keep it up!
+            Keep up the great work and continue your learning journey!
           </p>
         </div>
         <button

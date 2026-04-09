@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Bell, Search, Menu, X, BookOpen, ClipboardList, Calendar, LayoutDashboard } from "lucide-react";
-import { notifications, user } from "../../data/mockData";
+import { Bell, Search, Menu, BookOpen, ClipboardList, Calendar, LayoutDashboard } from "lucide-react";
+import { notifications } from "../../data/mockData";
+import { useUserProfile } from "../../context/UserProfileContext";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -10,6 +11,7 @@ interface HeaderProps {
 export function Header({ onMenuClick, title }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifList, setNotifList] = useState(notifications);
+  const { profile } = useUserProfile();
 
   const unreadCount = notifList.filter((n) => !n.read).length;
 
@@ -26,6 +28,11 @@ export function Header({ onMenuClick, title }: HeaderProps) {
       default: return <Bell className="w-4 h-4 text-muted-foreground" />;
     }
   };
+
+  // Get initials from name, fallback to "U"
+  const initials = profile?.full_name
+    ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : (profile?.email?.[0]?.toUpperCase() ?? "U");
 
   return (
     <header className="h-16 bg-background border-b border-border flex items-center px-4 sm:px-6 gap-4 sticky top-0 z-30 transition-colors duration-200">
@@ -117,8 +124,18 @@ export function Header({ onMenuClick, title }: HeaderProps) {
         </div>
 
         {/* User Avatar */}
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center cursor-pointer">
-          <span className="text-white text-xs font-bold">{user.avatar}</span>
+        <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 cursor-pointer ring-2 ring-blue-100 hover:ring-blue-300 transition-all">
+          {profile?.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt={profile.full_name ?? "User"}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+              <span className="text-white text-xs font-bold">{initials}</span>
+            </div>
+          )}
         </div>
       </div>
     </header>
