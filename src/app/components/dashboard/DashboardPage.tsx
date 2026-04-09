@@ -142,7 +142,7 @@ export default function DashboardPage() {
             </div>
             <span className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full font-medium">🔥</span>
           </div>
-          <p className="text-2xl text-foreground mb-0.5">{activeUser.streak}</p>
+          <p className="text-2xl text-foreground mb-0.5">0</p>
           <p className="text-muted-foreground text-xs">Day Streak</p>
         </div>
 
