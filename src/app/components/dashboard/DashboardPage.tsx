@@ -216,7 +216,19 @@ export default function DashboardPage() {
                           {course.category}
                         </span>
                       </div>
-                      <p className="text-muted-foreground text-xs mb-2">{course.users?.full_name || "Tutor"}</p>
+                      {/* Tutor row with avatar */}
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+                          {course.users?.avatar_url ? (
+                            <img src={course.users.avatar_url} alt={course.users.full_name ?? "Tutor"} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-white text-[8px] font-bold">
+                              {(course.users?.full_name ?? "T").charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-muted-foreground text-xs">{course.users?.full_name || "Tutor"}</p>
+                      </div>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 bg-muted rounded-full h-1.5">
                           <div

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   User,
   Lock,
@@ -18,7 +18,12 @@ import {
   Mail,
   Video,
   DollarSign,
+  Loader2,
+  AlertCircle,
+  Camera,
 } from "lucide-react";
+import { supabase } from "../../../lib/supabase";
+import { useUserProfile } from "../../context/UserProfileContext";
 
 type Section = "profile" | "security" | "notifications" | "payout";
 
@@ -30,10 +35,66 @@ const sidebarItems: { id: Section; label: string; icon: React.ElementType; desc:
 ];
 
 function ProfileSection() {
+  const { profile, refetch } = useUserProfile();
   const [saved, setSaved] = useState(false);
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [fullName, setFullName] = useState("");
+  const [bio, setBio] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name ?? "");
+      if (profile.avatar_url) setAvatarPreview(profile.avatar_url);
+    }
+  }, [profile]);
+
+  const initials = profile?.full_name
+    ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : (profile?.email?.[0]?.toUpperCase() ?? "T");
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile?.id) return;
+    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarUploading(true);
+    setSaveError(null);
+    try {
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${profile.id}/avatar.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      const { error: dbError } = await supabase.from("users").update({ avatar_url: urlData.publicUrl }).eq("id", profile.id);
+      if (dbError) throw dbError;
+      setAvatarPreview(urlData.publicUrl);
+      refetch();
+    } catch (err: any) {
+      setSaveError("Avatar upload failed: " + err.message);
+      setAvatarPreview(profile.avatar_url ?? null);
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!profile?.id) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const { error } = await supabase.from("users").update({ full_name: fullName }).eq("id", profile.id);
+      if (error) throw error;
+      refetch();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err: any) {
+      setSaveError("Save failed: " + err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -43,71 +104,83 @@ function ProfileSection() {
         <p className="text-muted-foreground text-sm mt-1">This information is shown to your students.</p>
       </div>
 
+      {saveError && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+          <p className="text-red-700 text-xs">{saveError}</p>
+        </div>
+      )}
+
       {/* Avatar */}
       <div className="flex items-center gap-6">
         <div className="relative">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-            <span className="text-white text-2xl font-bold">DR</span>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+          <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+            {avatarPreview ? (
+              <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white text-2xl font-bold">{initials}</span>
+            )}
           </div>
-          <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-blue-700 rounded-full border-2 border-white flex items-center justify-center hover:bg-blue-800 transition-colors">
-            <Upload className="w-3 h-3 text-white" />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarUploading}
+            className="absolute -bottom-1 -right-1 w-7 h-7 bg-blue-700 rounded-full border-2 border-white flex items-center justify-center hover:bg-blue-800 transition-colors disabled:opacity-60"
+          >
+            {avatarUploading ? <Loader2 className="w-3 h-3 text-white animate-spin" /> : <Camera className="w-3 h-3 text-white" />}
           </button>
         </div>
         <div>
-          <p className="font-semibold text-foreground">Dr. Sarah Jenkins</p>
-          <p className="text-muted-foreground text-sm">Lead Instructor</p>
-          <button className="text-blue-700 text-xs font-medium mt-1 hover:text-blue-800 transition-colors">Change photo</button>
+          <p className="font-semibold text-foreground">{profile?.full_name || "Your Name"}</p>
+          <p className="text-muted-foreground text-sm capitalize">{profile?.role || "Instructor"} · {profile?.email}</p>
+          <p className="text-xs text-muted-foreground mt-1">Click the camera icon to change photo</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div>
-          <label className="block text-sm font-medium text-foreground/80 mb-1.5">First Name</label>
-          <input defaultValue="Sarah" type="text" className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none transition-all" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-foreground/80 mb-1.5">Last Name</label>
-          <input defaultValue="Jenkins" type="text" className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none transition-all" />
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-foreground/80 mb-1.5">Full Name</label>
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            type="text"
+            placeholder="Your full name"
+            className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none transition-all"
+          />
         </div>
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-foreground/80 mb-1.5">Email Address</label>
-          <input defaultValue="dr.jenkins@internconnect.edu" type="email" className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none transition-all" />
+          <input
+            value={profile?.email ?? ""}
+            disabled
+            type="email"
+            className="w-full border border-border rounded-xl px-4 py-2.5 text-sm bg-muted/40 text-muted-foreground cursor-not-allowed outline-none"
+          />
+          <p className="text-xs text-muted-foreground mt-1">Email cannot be changed here</p>
         </div>
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-foreground/80 mb-1.5">Bio / Tagline</label>
           <textarea
             rows={3}
-            defaultValue="Senior Software Engineer & Educator with 12+ years of experience in full-stack development, system design, and mentoring."
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Tell students about yourself..."
             className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none transition-all resize-none"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-foreground/80 mb-1.5">Specialization</label>
-          <input defaultValue="Full-Stack & System Design" type="text" className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent outline-none transition-all" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-foreground/80 mb-1.5">Language</label>
-          <div className="relative">
-            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/80" />
-            <select className="w-full border border-border rounded-xl pl-9 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 outline-none bg-card">
-              <option>English</option>
-              <option>Spanish</option>
-              <option>French</option>
-            </select>
-          </div>
-        </div>
       </div>
 
-      <div className="flex items-center justify-between pt-4 border-t border-border">
-        <p className="text-xs text-muted-foreground/80">Last updated: 3 days ago</p>
+      <div className="flex items-center justify-end pt-4 border-t border-border">
         <button
           onClick={handleSave}
+          disabled={saving}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${
             saved ? "bg-emerald-600 text-white" : "bg-blue-700 text-white hover:bg-blue-800 shadow-sm shadow-blue-200"
-          }`}
+          } disabled:opacity-60`}
         >
-          {saved ? <CheckCircle2 className="w-4 h-4" /> : null}
-          {saved ? "Saved!" : "Save Changes"}
+          {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> :
+           saved ? <><CheckCircle2 className="w-4 h-4" /> Saved!</> :
+           "Save Changes"}
         </button>
       </div>
     </div>

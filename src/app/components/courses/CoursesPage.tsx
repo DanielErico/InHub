@@ -160,8 +160,20 @@ export default function CoursesPage() {
 
               {/* Content */}
               <div className="p-4">
-                <h3 className="text-foreground text-sm font-semibold mb-1 leading-snug truncate">{course.title}</h3>
-                <p className="text-muted-foreground/80 text-xs mb-3">{course.users?.full_name || "Unknown Tutor"}</p>
+                <h3 className="text-foreground text-sm font-semibold mb-2 leading-snug truncate">{course.title}</h3>
+                {/* Tutor row with avatar */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+                    {course.users?.avatar_url ? (
+                      <img src={course.users.avatar_url} alt={course.users.full_name ?? "Tutor"} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-white text-[9px] font-bold">
+                        {(course.users?.full_name ?? "T").charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground/80 text-xs truncate">{course.users?.full_name || "Unknown Tutor"}</p>
+                </div>
 
                 {/* Meta */}
                 <div className="flex items-center gap-3 text-xs text-muted-foreground/80 mb-3">

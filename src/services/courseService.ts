@@ -49,7 +49,7 @@ export const courseService = {
   async getAllPublishedCourses() {
     const { data, error } = await supabase
       .from('courses')
-      .select('*')
+      .select('*, users(full_name, avatar_url)')
       .eq('status', 'published')
       .order('created_at', { ascending: false });
 
