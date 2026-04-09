@@ -13,8 +13,8 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
-import { user } from "../../data/mockData";
 import { useTheme } from "../../contexts/ThemeContext";
+import { useUserProfile } from "../../context/UserProfileContext";
 
 interface SidebarProps {
   onClose?: () => void;
@@ -31,6 +31,11 @@ const navItems = [
 export function Sidebar({ onClose }: SidebarProps) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { profile } = useUserProfile();
+
+  const initials = profile?.full_name
+    ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : (profile?.email?.[0]?.toUpperCase() ?? "S");
 
   const handleLogout = () => {
     navigate("/");
@@ -107,12 +112,18 @@ export function Sidebar({ onClose }: SidebarProps) {
       {/* User Profile */}
       <div className="px-3 py-4 border-t border-border">
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer group">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-bold">{user.avatar}</span>
+          <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt={profile.full_name ?? "User"} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+                <span className="text-white text-xs font-bold">{initials}</span>
+              </div>
+            )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sidebar-foreground text-sm font-medium truncate">{user.name}</p>
-            <p className="text-sidebar-foreground/60 text-xs capitalize">{user.role}</p>
+            <p className="text-sidebar-foreground text-sm font-medium truncate">{profile?.full_name || "Student"}</p>
+            <p className="text-sidebar-foreground/60 text-xs capitalize">{profile?.role || "Student"}</p>
           </div>
           <div className="flex items-center gap-1">
             <button
