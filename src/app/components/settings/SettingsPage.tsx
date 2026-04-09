@@ -112,8 +112,7 @@ export default function SettingsPage() {
       // Update the user's avatar_url in the users table
       const { error: dbError } = await supabase
         .from("users")
-        .update({ avatar_url: publicUrl })
-        .eq("id", profile.id);
+        .upsert({ id: profile.id, avatar_url: publicUrl }, { onConflict: "id" });
 
       if (dbError) throw dbError;
 
@@ -138,10 +137,10 @@ export default function SettingsPage() {
     try {
       const { error } = await supabase
         .from("users")
-        .update({
+        .upsert({
+          id: profile.id,
           full_name: profileForm.full_name,
-        })
-        .eq("id", profile.id);
+        }, { onConflict: "id" });
 
       if (error) throw error;
 

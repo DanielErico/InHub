@@ -68,7 +68,7 @@ function ProfileSection() {
       const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file, { upsert: true });
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
-      const { error: dbError } = await supabase.from("users").update({ avatar_url: urlData.publicUrl }).eq("id", profile.id);
+      const { error: dbError } = await supabase.from("users").upsert({ id: profile.id, avatar_url: urlData.publicUrl }, { onConflict: "id" });
       if (dbError) throw dbError;
       setAvatarPreview(urlData.publicUrl);
       refetch();
@@ -85,7 +85,7 @@ function ProfileSection() {
     setSaving(true);
     setSaveError(null);
     try {
-      const { error } = await supabase.from("users").update({ full_name: fullName }).eq("id", profile.id);
+      const { error } = await supabase.from("users").upsert({ id: profile.id, full_name: fullName }, { onConflict: "id" });
       if (error) throw error;
       refetch();
       setSaved(true);
