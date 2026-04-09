@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUserProfile } from "../../context/UserProfileContext";
+import { supabase } from "../../../lib/supabase";
 
 interface SidebarProps {
   onClose?: () => void;
@@ -37,7 +38,8 @@ export function Sidebar({ onClose }: SidebarProps) {
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : (profile?.email?.[0]?.toUpperCase() ?? "S");
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate("/");
   };
 

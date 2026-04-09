@@ -15,6 +15,7 @@ import {
 import { user } from "../../data/mockData";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUserProfile } from "../../context/UserProfileContext";
+import { supabase } from "../../../lib/supabase";
 
 interface TutorSidebarProps {
   onClose?: () => void;
@@ -38,7 +39,8 @@ export function TutorSidebar({ onClose }: TutorSidebarProps) {
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : (profile?.email?.[0]?.toUpperCase() ?? "T");
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate("/");
   };
 
