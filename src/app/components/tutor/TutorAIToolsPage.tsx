@@ -376,7 +376,7 @@ export default function TutorAIToolsPage() {
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">AI Tools</h1>
           </div>
-          <p className="text-muted-foreground mt-1 ml-[52px]">Powered by NVIDIA Nemotron — generate curriculum, quizzes, and student insights instantly.</p>
+          <p className="text-muted-foreground mt-1 ml-[52px]">Generate curriculum, quizzes, and student insights instantly with advanced AI tutor tools.</p>
         </div>
         
         <button 
@@ -602,7 +602,7 @@ export default function TutorAIToolsPage() {
                 <div>
                   <p className="text-red-800 text-sm font-medium">Generation failed</p>
                   <p className="text-red-600 text-xs mt-1">{error}</p>
-                  <p className="text-red-500 text-xs mt-2">Make sure your NVIDIA API key is set correctly in the <code className="bg-red-100 px-1 rounded">.env</code> file.</p>
+                  <p className="text-red-500 text-xs mt-2">Make sure your API key is configured correctly in the <code className="bg-red-100 px-1 rounded">.env</code> file.</p>
                 </div>
               </div>
             )}
@@ -615,7 +615,7 @@ export default function TutorAIToolsPage() {
                     <Loader2 className="w-5 h-5 text-blue-700 animate-spin" />
                   </div>
                   <div>
-                    <p className="text-foreground font-semibold text-sm">Generating with NVIDIA AI...</p>
+                    <p className="text-foreground font-semibold text-sm">Generating with Advanced AI...</p>
                     <p className="text-muted-foreground/80 text-xs">This may take a few seconds</p>
                   </div>
                 </div>
@@ -648,7 +648,7 @@ export default function TutorAIToolsPage() {
                         {tools.find((t) => t.id === activeTool)?.title} Output
                       </p>
                       <p className="text-xs text-muted-foreground/80">
-                        {isGenerating ? "Streaming..." : "Powered by NVIDIA Nemotron"}
+                        {isGenerating ? "Streaming..." : "Powered by Advanced AI"}
                       </p>
                     </div>
                   </div>
@@ -750,7 +750,7 @@ export default function TutorAIToolsPage() {
                 </div>
                 <h3 className="text-foreground/80 font-semibold mb-2">Ready to Generate</h3>
                 <p className="text-muted-foreground/80 text-sm max-w-sm mx-auto">
-                  Fill in the settings on the left and click "Generate with AI" to create your content using NVIDIA Nemotron.
+                  Fill in the settings on the left and click "Generate with AI" to create your content using advanced artificial intelligence.
                 </p>
               </div>
             )}
@@ -766,7 +766,7 @@ export default function TutorAIToolsPage() {
           </div>
           <h3 className="text-foreground font-bold text-xl mb-2">Select a Tool to Get Started</h3>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Choose one of the AI tools above to generate curriculum outlines, quiz questions, or student performance insights powered by NVIDIA's Nemotron model.
+            Choose one of the AI tools above to generate curriculum outlines, quiz questions, or student performance insights powered by advanced AI models.
           </p>
         </div>
       )}

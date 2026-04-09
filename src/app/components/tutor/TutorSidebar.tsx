@@ -91,7 +91,7 @@ export function TutorSidebar({ onClose }: TutorSidebarProps) {
               <span className="text-indigo-900 text-xs font-semibold">AI Powered</span>
             </div>
             <p className="text-muted-foreground text-xs leading-relaxed mb-3">
-              Generate curriculums, quizzes, and student insights with NVIDIA AI.
+              Generate curriculums, quizzes, and student insights with our advanced AI tools.
             </p>
             <NavLink
               to="/app/tutor/ai-tools"
