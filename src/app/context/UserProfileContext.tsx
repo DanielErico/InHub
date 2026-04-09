@@ -36,7 +36,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         .from("users")
         .select("id, full_name, role, avatar_url")
         .eq("id", authUser.id)
-        .single();
+        .maybeSingle();
 
       setProfile({
         id: authUser.id,
