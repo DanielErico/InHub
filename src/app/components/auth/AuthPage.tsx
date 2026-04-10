@@ -52,14 +52,25 @@ export default function AuthPage() {
 
         // Insert into our users table
         if (data.user) {
-          await supabase.from("users").upsert({
+          const { error: dbError } = await supabase.from("users").upsert({
             id: data.user.id,
             full_name: name,
             role: role,
           });
+          
+          if (dbError) {
+            console.error("Profile creation error:", dbError);
+            throw new Error("Account created, but couldn't create profile. " + dbError.message);
+          }
         }
 
-        // Navigate based on role
+        // Navigate based on role OR ask for email confirmation
+        if (!data.session) {
+          setError("Account created! Please check your email to confirm your account before logging in.");
+          setIsLoading(false);
+          return;
+        }
+
         if (role === "tutor") {
           navigate("/app/tutor/dashboard");
         } else {
