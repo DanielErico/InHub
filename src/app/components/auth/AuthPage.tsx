@@ -6,11 +6,12 @@ import { Logo } from "../ui/Logo";
 import { supabase } from "../../../lib/supabase";
 
 export default function AuthPage() {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "verify">("login");
   const [role, setRole] = useState<"student" | "tutor">("student");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
@@ -50,32 +51,8 @@ export default function AuthPage() {
 
         if (signUpError) throw signUpError;
 
-        // Insert into our users table
-        if (data.user) {
-          const { error: dbError } = await supabase.from("users").upsert({
-            id: data.user.id,
-            full_name: name,
-            role: role,
-          });
-          
-          if (dbError) {
-            console.error("Profile creation error:", dbError);
-            throw new Error("Account created, but couldn't create profile. " + dbError.message);
-          }
-        }
-
-        // Navigate based on role OR ask for email confirmation
-        if (!data.session) {
-          setError("Account created! Please check your email to confirm your account before logging in.");
-          setIsLoading(false);
-          return;
-        }
-
-        if (role === "tutor") {
-          navigate("/app/tutor/dashboard");
-        } else {
-          navigate("/app/dashboard");
-        }
+        // Switch to verification mode
+        setMode("verify");
       } else {
         // Login
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -104,6 +81,44 @@ export default function AuthPage() {
     } catch (err: any) {
       console.error("Auth error:", err);
       setError(err.message || "Authentication failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: 'signup',
+      });
+
+      if (verifyError) throw verifyError;
+
+      if (data.user) {
+        // Now create the profile (Session is active, 403 issue is gone)
+        const { error: dbError } = await supabase.from("users").upsert({
+          id: data.user.id,
+          full_name: name,
+          role: role,
+        });
+
+        if (dbError) throw dbError;
+
+        if (role === "tutor") {
+          navigate("/app/tutor/dashboard");
+        } else {
+          navigate("/app/dashboard");
+        }
+      }
+    } catch (err: any) {
+      console.error("Verification error:", err);
+      setError(err.message || "Verification failed. Check your code.");
     } finally {
       setIsLoading(false);
     }
@@ -276,111 +291,150 @@ export default function AuthPage() {
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === "signup" && (
+          {mode === "verify" ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-2 text-center">
+                <p className="text-blue-800 text-sm">
+                  We've sent a 6-digit verification code to <strong>{email}</strong>
+                </p>
+              </div>
               <div>
-                <label className="block text-sm text-foreground/80 mb-1.5">Full Name</label>
+                <label className="block text-sm text-foreground/80 mb-1.5 text-center">Enter Verification Code</label>
                 <input
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Daniel Okafor"
-                  className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000000"
+                  className="w-full border border-border rounded-xl px-4 py-4 text-2xl font-bold tracking-[0.5em] text-center text-foreground placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
                   required
                 />
               </div>
-            )}
-            <div>
-              <label className="block text-sm text-foreground/80 mb-1.5">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-foreground/80 mb-1.5">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full border border-border rounded-xl px-4 py-3 pr-12 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-muted-foreground"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-            {mode === "signup" && (
-              <div>
-                <label className="block text-sm text-foreground/80 mb-1.5">Confirm Password</label>
-                <div className="relative">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3.5 text-sm font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-70 shadow-lg shadow-blue-400"
+              >
+                {isLoading ? "Verifying..." : "Verify Code"}
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setMode("signup")}
+                className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
+              >
+                Back to Sign Up
+              </button>
+            </form>
+          ) : (
+            <>
+              {/* Form Content (Original Login/Signup) */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {mode === "signup" && (
+                  <div>
+                    <label className="block text-sm text-foreground/80 mb-1.5">Full Name</label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Daniel Okafor"
+                      className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                      required
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm text-foreground/80 mb-1.5">Email Address</label>
                   <input
-                    type={showConfirm ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full border border-border rounded-xl px-4 py-3 pr-12 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirm(!showConfirm)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-muted-foreground"
-                  >
-                    {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
                 </div>
-              </div>
-            )}
+                <div>
+                  <label className="block text-sm text-foreground/80 mb-1.5">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full border border-border rounded-xl px-4 py-3 pr-12 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-muted-foreground"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+                {mode === "signup" && (
+                  <div>
+                    <label className="block text-sm text-foreground/80 mb-1.5">Confirm Password</label>
+                    <div className="relative">
+                      <input
+                        type={showConfirm ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full border border-border rounded-xl px-4 py-3 pr-12 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirm(!showConfirm)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/80 hover:text-muted-foreground"
+                      >
+                        {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-            {mode === "login" && (
-              <div className="flex justify-end">
-                <button type="button" className="text-sm text-blue-700 hover:text-blue-800 transition-colors">
-                  Forgot password?
+                {mode === "login" && (
+                  <div className="flex justify-end">
+                    <button type="button" className="text-sm text-blue-700 hover:text-blue-800 transition-colors">
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3.5 text-sm font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-70 shadow-lg shadow-blue-400"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      {mode === "login" ? "Signing in..." : "Creating account..."}
+                    </>
+                  ) : (
+                    <>
+                      {mode === "login" ? "Sign In" : "Create Account"}
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
-              </div>
-            )}
+              </form>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3.5 text-sm font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-70 shadow-lg shadow-blue-400"
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {mode === "login" ? "Signing in..." : "Creating account..."}
-                </>
-              ) : (
-                <>
-                  {mode === "login" ? "Sign In" : "Create Account"}
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Toggle Mode */}
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
-            <button
-              onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); }}
-              className="text-blue-700 hover:text-blue-800 font-medium transition-colors"
-            >
-              {mode === "login" ? "Sign Up" : "Sign In"}
-            </button>
-          </p>
+              {/* Toggle Mode */}
+              <p className="text-center text-sm text-muted-foreground mt-6">
+                {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
+                <button
+                  onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); }}
+                  className="text-blue-700 hover:text-blue-800 font-medium transition-colors"
+                >
+                  {mode === "login" ? "Sign Up" : "Sign In"}
+                </button>
+              </p>
+            </>
+          )}
 
           <p className="text-center text-xs text-muted-foreground/80 mt-4">
             Powered by InternConnect
