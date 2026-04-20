@@ -1,4 +1,5 @@
 import { createBrowserRouter, redirect } from "react-router";
+import { supabase } from "../lib/supabase";
 import AuthPage from "./components/auth/AuthPage";
 import Layout from "./components/layout/Layout";
 import DashboardPage from "./components/dashboard/DashboardPage";
@@ -16,6 +17,60 @@ import TutorSettingsPage from "./components/tutor/TutorSettingsPage";
 import TutorAIToolsPage from "./components/tutor/TutorAIToolsPage";
 import TutorCourseDetailsPage from "./components/tutor/TutorCourseDetailsPage";
 
+// Authentication loader - checks if user is authenticated
+async function authLoader() {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      return redirect("/");
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Auth loader error:", error);
+    return redirect("/");
+  }
+}
+
+// Tutor-specific loader - checks if user has tutor role
+async function tutorAuthLoader() {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      return redirect("/");
+    }
+
+    // Get user role
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return redirect("/");
+    }
+
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (userData?.role !== "tutor") {
+      return redirect("/app/dashboard");
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Tutor auth loader error:", error);
+    return redirect("/");
+  }
+}
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -24,6 +79,7 @@ export const router = createBrowserRouter([
   {
     path: "/app",
     Component: Layout,
+    loader: authLoader,
     children: [
       {
         index: true,
@@ -58,6 +114,7 @@ export const router = createBrowserRouter([
   {
     path: "/app/tutor",
     Component: TutorLayout,
+    loader: tutorAuthLoader,
     children: [
       {
         index: true,

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap, AlertCircle, RefreshCw } from "lucide-react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { Logo } from "../ui/Logo";
 import { supabase } from "../../../lib/supabase";
@@ -16,12 +16,30 @@ export default function AuthPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Start a resend cooldown timer
+  const startCooldown = (seconds = 60) => {
+    setResendCooldown(seconds);
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
     setIsLoading(true);
 
     try {
@@ -37,24 +55,37 @@ export default function AuthPage() {
           return;
         }
 
-        // Sign up with Supabase
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        // Step 1: Create the account
+        // signUp automatically sends a confirmation email when 'Confirm email' is ON in Supabase.
+        // Configure the Supabase email template to show {{ .Token }} for a 6-digit OTP code.
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: {
-              full_name: name,
-              role: role,
-            },
+            data: { full_name: name, role },
           },
         });
 
         if (signUpError) throw signUpError;
 
-        // Switch to verification mode
+        // If Supabase auto-signed the user in (email confirmation is DISABLED),
+        // there will be a live session — skip OTP and go straight to the app.
+        if (signUpData?.session) {
+          await supabase.from("users").upsert({
+            id: signUpData.session.user.id,
+            full_name: name,
+            role,
+          });
+          navigate(role === "tutor" ? "/app/tutor/dashboard" : "/app/dashboard");
+          return;
+        }
+
+        // Email confirmation is ON — signUp already sent the OTP email.
+        // No need to call signInWithOtp separately (that was causing the type mismatch).
+        startCooldown(60);
         setMode("verify");
       } else {
-        // Login
+        // Login with email + password
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -62,7 +93,6 @@ export default function AuthPage() {
 
         if (signInError) throw signInError;
 
-        // Get the user's role from our users table
         if (data.user) {
           const { data: profile } = await supabase
             .from("users")
@@ -71,16 +101,38 @@ export default function AuthPage() {
             .single();
 
           const userRole = profile?.role || role;
-          if (userRole === "tutor") {
-            navigate("/app/tutor/dashboard");
-          } else {
-            navigate("/app/dashboard");
-          }
+          navigate(userRole === "tutor" ? "/app/tutor/dashboard" : "/app/dashboard");
         }
       }
     } catch (err: any) {
       console.error("Auth error:", err);
-      setError(err.message || "Authentication failed. Please try again.");
+      if (
+        err.message?.toLowerCase().includes("sending confirmation") ||
+        err.message?.toLowerCase().includes("error sending")
+      ) {
+        setError(
+          "Supabase couldn't send the confirmation email. This is a Supabase rate limit issue. " +
+          "Fix: Supabase Dashboard → Authentication → Providers → turn OFF 'Confirm email'."
+        );
+      } else if (err.message?.includes("User already registered")) {
+        setError("An account with this email already exists. Please sign in instead.");
+      } else if (err.message?.includes("Invalid login credentials")) {
+        setError("Incorrect email or password. Please try again.");
+      } else if (err.message?.includes("Email not confirmed")) {
+        // For unconfirmed email on login: send OTP so they can verify
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email,
+          options: { shouldCreateUser: false },
+        });
+        if (!otpError) {
+          startCooldown(60);
+          setMode("verify");
+          return;
+        }
+        setError("Please verify your email. Check your inbox for a code.");
+      } else {
+        setError(err.message || "Authentication failed. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -89,38 +141,90 @@ export default function AuthPage() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMsg(null);
     setIsLoading(true);
 
+    // Supabase uses different token types:
+    //   'signup'  → token from supabase.auth.signUp() confirmation email
+    //   'email'   → token from supabase.auth.signInWithOtp() (used for Resend Code)
+    // We try 'signup' first (initial signup flow), then fall back to 'email' (resent code).
+    const tryVerify = async (type: "signup" | "email") => {
+      return supabase.auth.verifyOtp({ email, token: otp, type });
+    };
+
     try {
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: otp,
-        type: 'signup',
-      });
+      let data: any = null;
 
-      if (verifyError) throw verifyError;
+      const { data: d1, error: e1 } = await tryVerify("signup");
+      if (e1) {
+        // First attempt failed — try the 'email' type (resent OTP via signInWithOtp)
+        const { data: d2, error: e2 } = await tryVerify("email");
+        if (e2) {
+          // Both types failed — code is genuinely wrong or expired
+          throw e2;
+        }
+        data = d2;
+      } else {
+        data = d1;
+      }
 
-      if (data.user) {
-        // Now create the profile (Session is active, 403 issue is gone)
+      if (data?.user) {
+        // Upsert the profile now that the session is active
         const { error: dbError } = await supabase.from("users").upsert({
           id: data.user.id,
           full_name: name,
-          role: role,
+          role,
         });
+        if (dbError) console.warn("Profile upsert warning:", dbError.message);
 
-        if (dbError) throw dbError;
+        // Sign out the temporary OTP session so the user logs in properly
+        await supabase.auth.signOut();
 
-        if (role === "tutor") {
-          navigate("/app/tutor/dashboard");
-        } else {
-          navigate("/app/dashboard");
-        }
+        // Show success then redirect to login
+        setSuccessMsg("✅ Account verified! Please sign in with your email and password.");
+        setTimeout(() => {
+          setOtp("");
+          setPassword("");
+          setConfirmPassword("");
+          setName("");
+          setError(null);
+          setSuccessMsg(null);
+          setMode("login");
+        }, 2000);
       }
     } catch (err: any) {
       console.error("Verification error:", err);
-      setError(err.message || "Verification failed. Check your code.");
+      if (
+        err.message?.toLowerCase().includes("expired") ||
+        err.message?.toLowerCase().includes("invalid") ||
+        err.message?.toLowerCase().includes("otp")
+      ) {
+        setError("The code is wrong or has expired. Please use Resend Code to get a fresh one.");
+      } else {
+        setError(err.message || "Verification failed. Please try again.");
+      }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (resendCooldown > 0 || resendLoading) return;
+    setError(null);
+    setSuccessMsg(null);
+    setResendLoading(true);
+    try {
+      const { error: resendError } = await supabase.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: false },
+      });
+      if (resendError) throw resendError;
+      setSuccessMsg("A new verification code has been sent to your email.");
+      startCooldown(60);
+    } catch (err: any) {
+      setError(err.message || "Failed to resend code. Please try again.");
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -224,11 +328,13 @@ export default function AuthPage() {
           {/* Header */}
           <div className="mb-8">
             <h2 className="text-3xl text-foreground mb-2">
-              {mode === "login" ? "Welcome back" : "Create account"}
+              {mode === "login" ? "Welcome back" : mode === "verify" ? "Check your email" : "Create account"}
             </h2>
             <p className="text-muted-foreground">
               {mode === "login"
                 ? "Sign in to continue your learning journey"
+                : mode === "verify"
+                ? "Enter the 6-digit code we sent you"
                 : "Start your learning journey today"}
             </p>
           </div>
@@ -238,6 +344,14 @@ export default function AuthPage() {
             <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 flex items-center gap-2.5">
               <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
               <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* Success Message */}
+          {successMsg && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 flex items-center gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+              <p className="text-green-700 text-sm">{successMsg}</p>
             </div>
           )}
 
@@ -269,7 +383,7 @@ export default function AuthPage() {
 
           {/* Social Login */}
           <div className="space-y-3 mb-6">
-            <button 
+            <button
               onClick={handleGoogleLogin}
               className="w-full flex items-center justify-center gap-3 border border-border rounded-xl py-3 text-sm text-foreground/80 hover:bg-muted/50 hover:border-slate-300 transition-all duration-200 group"
             >
@@ -295,39 +409,65 @@ export default function AuthPage() {
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-2 text-center">
                 <p className="text-blue-800 text-sm">
-                  We've sent a 6-digit verification code to <strong>{email}</strong>
+                  We've sent an 8-digit verification code to <strong>{email}</strong>
                 </p>
+                <p className="text-blue-600 text-xs mt-1">Check your spam folder if you don't see it.</p>
               </div>
               <div>
                 <label className="block text-sm text-foreground/80 mb-1.5 text-center">Enter Verification Code</label>
                 <input
                   type="text"
-                  maxLength={6}
+                  maxLength={8}
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                  placeholder="000000"
+                  placeholder="00000000"
                   className="w-full border border-border rounded-xl px-4 py-4 text-2xl font-bold tracking-[0.5em] text-center text-foreground placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
                   required
+                  autoFocus
                 />
               </div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || otp.length < 8}
                 className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3.5 text-sm font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-70 shadow-lg shadow-blue-400"
               >
-                {isLoading ? "Verifying..." : "Verify Code"}
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Verifying...
+                  </>
+                ) : "Verify Code"}
               </button>
-              <button 
-                type="button" 
-                onClick={() => setMode("signup")}
+
+              {/* Resend Code */}
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-1">Didn't receive a code?</p>
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={resendCooldown > 0 || resendLoading}
+                  className="inline-flex items-center gap-1.5 text-sm text-blue-700 hover:text-blue-800 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${resendLoading ? "animate-spin" : ""}`} />
+                  {resendCooldown > 0
+                    ? `Resend in ${resendCooldown}s`
+                    : resendLoading
+                    ? "Sending..."
+                    : "Resend Code"}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { setMode("signup"); setOtp(""); setError(null); setSuccessMsg(null); }}
                 className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
               >
-                Back to Sign Up
+                ← Back to Sign Up
               </button>
             </form>
           ) : (
             <>
-              {/* Form Content (Original Login/Signup) */}
+              {/* Form Content (Login / Signup) */}
               <form onSubmit={handleSubmit} className="space-y-4">
                 {mode === "signup" && (
                   <div>
@@ -427,7 +567,7 @@ export default function AuthPage() {
               <p className="text-center text-sm text-muted-foreground mt-6">
                 {mode === "login" ? "Don't have an account?" : "Already have an account?"}{" "}
                 <button
-                  onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); }}
+                  onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(null); setSuccessMsg(null); }}
                   className="text-blue-700 hover:text-blue-800 font-medium transition-colors"
                 >
                   {mode === "login" ? "Sign Up" : "Sign In"}
