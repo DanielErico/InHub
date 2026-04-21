@@ -63,6 +63,7 @@ export default function AuthPage() {
           password,
           options: {
             data: { full_name: name, role },
+            emailRedirectTo: `${window.location.origin}/app/dashboard`,
           },
         });
 
