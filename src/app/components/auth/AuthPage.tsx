@@ -54,10 +54,7 @@ export default function AuthPage() {
           setIsLoading(false);
           return;
         }
-
-        // Step 1: Create the account
-        // signUp automatically sends a confirmation email when 'Confirm email' is ON in Supabase.
-        // Configure the Supabase email template to show {{ .Token }} for a 6-digit OTP code.
+        
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
