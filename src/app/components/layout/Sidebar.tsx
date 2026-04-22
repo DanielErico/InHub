@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  ShieldAlert,
 } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUserProfile } from "../../context/UserProfileContext";
@@ -87,6 +88,33 @@ export function Sidebar({ onClose }: SidebarProps) {
             )}
           </NavLink>
         ))}
+        {profile?.role?.toLowerCase() === "admin" && (
+          <NavLink
+            to="/app/admin"
+            onClick={onClose}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group mt-4 ${
+                isActive
+                  ? "bg-red-500/10 text-red-600 font-medium"
+                  : "text-red-500/70 hover:bg-red-50 hover:text-red-600"
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <div
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-all ${
+                    isActive ? "bg-red-600 shadow-sm shadow-red-400" : "bg-red-100 group-hover:bg-red-200"
+                  }`}
+                >
+                  <ShieldAlert className={`w-4 h-4 ${isActive ? "text-white" : "text-red-600"}`} />
+                </div>
+                <span className="flex-1 font-bold">Admin Panel</span>
+                {isActive && <ChevronRight className="w-4 h-4 text-red-600" />}
+              </>
+            )}
+          </NavLink>
+        )}
 
         {/* AI Feature Badge */}
         <div className="mt-6 mx-1">

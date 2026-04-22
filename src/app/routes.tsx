@@ -1,6 +1,7 @@
 import { createBrowserRouter, redirect } from "react-router";
 import { supabase } from "../lib/supabase";
 import AuthPage from "./components/auth/AuthPage";
+import AuthCallbackPage from "./components/auth/AuthCallbackPage";
 import Layout from "./components/layout/Layout";
 import DashboardPage from "./components/dashboard/DashboardPage";
 import CoursesPage from "./components/courses/CoursesPage";
@@ -16,6 +17,15 @@ import TutorSchedulePage from "./components/tutor/TutorSchedulePage";
 import TutorSettingsPage from "./components/tutor/TutorSettingsPage";
 import TutorAIToolsPage from "./components/tutor/TutorAIToolsPage";
 import TutorCourseDetailsPage from "./components/tutor/TutorCourseDetailsPage";
+
+import { AdminLayout } from "./components/admin/AdminLayout";
+import { DashboardPage as AdminDashboardPage } from "./components/admin/pages/DashboardPage";
+import { UsersPage as AdminUsersPage } from "./components/admin/pages/UsersPage";
+import { CoursesPage as AdminCoursesPage } from "./components/admin/pages/CoursesPage";
+import { AssignmentsPage as AdminAssignmentsPage } from "./components/admin/pages/AssignmentsPage";
+import { AIAnalyticsPage as AdminAIAnalyticsPage } from "./components/admin/pages/AIAnalyticsPage";
+import { NotificationsPage as AdminNotificationsPage } from "./components/admin/pages/NotificationsPage";
+import { SettingsPage as AdminSettingsPage } from "./components/admin/pages/SettingsPage";
 
 // Authentication loader - checks if user is authenticated
 async function authLoader() {
@@ -60,7 +70,7 @@ async function tutorAuthLoader() {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (userData?.role !== "tutor") {
+    if (userData?.role?.toLowerCase() !== "tutor") {
       return redirect("/app/dashboard");
     }
 
@@ -71,10 +81,50 @@ async function tutorAuthLoader() {
   }
 }
 
+// Admin-specific loader - checks if user has admin role
+async function adminAuthLoader() {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      return redirect("/");
+    }
+
+    // Get user role
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return redirect("/");
+    }
+
+    const { data: userData } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (userData?.role?.toLowerCase() !== "admin") {
+      return redirect("/app/dashboard");
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Admin auth loader error:", error);
+    return redirect("/");
+  }
+}
+
 export const router = createBrowserRouter([
   {
     path: "/",
     Component: AuthPage,
+  },
+  {
+    path: "/auth/callback",
+    Component: AuthCallbackPage,
   },
   {
     path: "/app",
@@ -147,6 +197,41 @@ export const router = createBrowserRouter([
       {
         path: "ai-tools",
         Component: TutorAIToolsPage,
+      },
+    ],
+  },
+  {
+    path: "/app/admin",
+    Component: AdminLayout,
+    loader: adminAuthLoader,
+    children: [
+      {
+        index: true,
+        Component: AdminDashboardPage,
+      },
+      {
+        path: "users",
+        Component: AdminUsersPage,
+      },
+      {
+        path: "courses",
+        Component: AdminCoursesPage,
+      },
+      {
+        path: "assignments",
+        Component: AdminAssignmentsPage,
+      },
+      {
+        path: "ai-analytics",
+        Component: AdminAIAnalyticsPage,
+      },
+      {
+        path: "notifications",
+        Component: AdminNotificationsPage,
+      },
+      {
+        path: "settings",
+        Component: AdminSettingsPage,
       },
     ],
   },

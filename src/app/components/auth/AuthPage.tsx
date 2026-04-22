@@ -99,7 +99,11 @@ export default function AuthPage() {
             .single();
 
           const userRole = profile?.role || role;
-          navigate(userRole === "tutor" ? "/app/tutor/dashboard" : "/app/dashboard");
+          if (userRole?.toLowerCase() === "admin") {
+            navigate("/app/admin");
+          } else {
+            navigate(userRole === "tutor" ? "/app/tutor/dashboard" : "/app/dashboard");
+          }
         }
       }
     } catch (err: any) {
@@ -232,7 +236,7 @@ export default function AuthPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/app/dashboard`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) throw error;
