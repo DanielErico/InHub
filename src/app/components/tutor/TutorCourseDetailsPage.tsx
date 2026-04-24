@@ -11,20 +11,26 @@ import {
   X,
   Loader2,
   Clock,
-  Play
+  Play,
+  Info,
+  Send
 } from "lucide-react";
 import { courseService, Course, Lesson, Resource } from "../../../services/courseService";
+import { CourseInfoForm } from "./CourseInfoForm";
 
 type UploadType = "video" | "pdf" | null;
+type TabId = "info" | "videos" | "pdfs";
 
 export default function TutorCourseDetailsPage() {
   const { courseId } = useParams();
   const navigate = useNavigate();
 
+  const [activeTab, setActiveTab] = useState<TabId>("info");
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState<UploadType>(null);
@@ -93,7 +99,7 @@ export default function TutorCourseDetailsPage() {
       }
       alert(`${showUploadModal} uploaded successfully!`);
       handleModalClose();
-      loadCourseData(); // Refresh lists
+      loadCourseData();
     } catch (err: any) {
       console.error(err);
       alert(`Upload failed: ${err.message}`);
@@ -108,6 +114,30 @@ export default function TutorCourseDetailsPage() {
     setFile(null);
   };
 
+  const handleSubmitForReview = async () => {
+    if (!course) return;
+    const missing: string[] = [];
+    if (!course.level) missing.push("Course Level");
+    if (!course.target_audience) missing.push("Target Audience");
+    if (!course.learning_outcomes?.filter(Boolean).length) missing.push("Learning Outcomes (at least 1)");
+    if (missing.length) {
+      alert(`Please fill in the following in the Course Info tab before submitting:\n\n• ${missing.join('\n• ')}`);
+      setActiveTab("info");
+      return;
+    }
+    if (!confirm("Submit this course for admin review? You won't be able to edit it until reviewed.")) return;
+    setSubmitting(true);
+    try {
+      await courseService.updateCourseStatus(course.id, 'pending_review');
+      setCourse(prev => prev ? { ...prev, status: 'pending_review' } : prev);
+      alert("Course submitted for review!");
+    } catch (err: any) {
+      alert("Failed to submit: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-40">
@@ -120,46 +150,94 @@ export default function TutorCourseDetailsPage() {
     return <div className="p-8 text-center text-muted-foreground">Course not found.</div>;
   }
 
+  const statusColors: Record<string, string> = {
+    draft: "bg-gray-100 text-gray-600",
+    pending_review: "bg-amber-100 text-amber-700",
+    needs_changes: "bg-orange-100 text-orange-700",
+    published: "bg-emerald-100 text-emerald-700",
+    rejected: "bg-red-100 text-red-700",
+  };
+
+  const canSubmit = course.status === 'draft' || course.status === 'needs_changes';
+
+  const tabs: { id: TabId; label: string; icon: any; count?: number }[] = [
+    { id: "info", label: "Course Info", icon: Info },
+    { id: "videos", label: "Videos", icon: Video, count: lessons.length },
+    { id: "pdfs", label: "PDFs", icon: FileText, count: resources.length },
+  ];
+
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="p-6 max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center gap-4 border-b border-border pb-6">
+      <div className="flex items-start gap-4 border-b border-border pb-6">
         <button 
           onClick={() => navigate("/app/tutor/content")}
-          className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground"
+          className="p-2 hover:bg-muted rounded-xl transition-colors text-muted-foreground mt-1"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-            {course.title}
-            <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md">
-              {course.status}
-            </span>
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage curriculum and resources for this course.</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-foreground truncate">{course.title}</h1>
+          <p className="text-muted-foreground text-sm mt-1">Manage curriculum, resources, and course details.</p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className={`text-xs font-semibold px-3 py-1.5 rounded-full capitalize ${statusColors[course.status] || statusColors.draft}`}>
+            {course.status.replace('_',' ')}
+          </span>
+          {canSubmit && (
+            <button
+              onClick={handleSubmitForReview}
+              disabled={submitting}
+              className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-blue-200 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}
+              Submit for Review
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Videos Column */}
+      {/* Tabs */}
+      <div className="flex gap-1 bg-muted/50 p-1 rounded-xl w-fit">
+        {tabs.map(({ id, label, icon: Icon, count }) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === id
+                ? "bg-card shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+            {count !== undefined && count > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                activeTab === id ? "bg-blue-100 text-blue-700" : "bg-muted text-muted-foreground"
+              }`}>{count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "info" && (
+        <CourseInfoForm course={course} onSaved={setCourse} />
+      )}
+
+      {activeTab === "videos" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-foreground">
-              <Video className="w-5 h-5 text-blue-600" /> Course Curriculum (Videos)
+              <Video className="w-5 h-5 text-blue-600" /> Course Videos
             </h2>
-            <button
-              onClick={() => setShowUploadModal("video")}
-              className="text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
-            >
+            <button onClick={() => setShowUploadModal("video")} className="text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5">
               <Plus className="w-4 h-4" /> Add Video
             </button>
           </div>
-          
           <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden min-h-[300px]">
             {lessons.length === 0 ? (
-              <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center h-full min-h-[300px]">
+              <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[300px]">
                 <Video className="w-8 h-8 text-slate-300 mb-3" />
                 <p className="text-sm">No videos uploaded yet.</p>
               </div>
@@ -167,80 +245,56 @@ export default function TutorCourseDetailsPage() {
               <div className="divide-y divide-border">
                 {lessons.map((lesson, idx) => (
                   <div key={lesson.id} className="flex items-center gap-4 p-4 hover:bg-muted/30 transition-colors">
-                    <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">
-                      {idx + 1}
-                    </div>
+                    <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center font-bold text-sm shrink-0">{idx + 1}</div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground truncate">{lesson.title}</p>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> {lesson.duration}</span>
-                        <a href={lesson.video_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline">
-                          <Play className="w-3 h-3"/> View
-                        </a>
+                        <a href={lesson.video_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline"><Play className="w-3 h-3"/>View</a>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteLesson(lesson.id)}
-                      className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete Video"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <button onClick={() => handleDeleteLesson(lesson.id)} className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 ))}
               </div>
             )}
           </div>
         </div>
+      )}
 
-        {/* Resources Column */}
+      {activeTab === "pdfs" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold flex items-center gap-2 text-foreground">
-              <FileText className="w-5 h-5 text-rose-500" /> Additional Resources (PDFs)
+              <FileText className="w-5 h-5 text-rose-500" /> PDF Resources
             </h2>
-            <button
-              onClick={() => setShowUploadModal("pdf")}
-              className="text-sm bg-rose-50 text-rose-700 hover:bg-rose-100 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
-            >
+            <button onClick={() => setShowUploadModal("pdf")} className="text-sm bg-rose-50 text-rose-700 hover:bg-rose-100 px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5">
               <Plus className="w-4 h-4" /> Add PDF
             </button>
           </div>
-          
           <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden min-h-[300px]">
-             {resources.length === 0 ? (
-              <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center h-full min-h-[300px]">
+            {resources.length === 0 ? (
+              <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[300px]">
                 <FileText className="w-8 h-8 text-slate-300 mb-3" />
-                <p className="text-sm">No resources uploaded yet.</p>
+                <p className="text-sm">No PDFs uploaded yet.</p>
               </div>
             ) : (
               <div className="divide-y divide-border">
                 {resources.map((res) => (
                   <div key={res.id} className="flex items-center gap-4 p-4 hover:bg-muted/30 transition-colors">
-                    <div className="w-10 h-10 bg-rose-50 rounded-lg flex items-center justify-center shrink-0">
-                      <FileText className="w-5 h-5 text-rose-500" />
-                    </div>
+                    <div className="w-10 h-10 bg-rose-50 rounded-lg flex items-center justify-center shrink-0"><FileText className="w-5 h-5 text-rose-500" /></div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground truncate">{res.title}</p>
-                      <a href={res.file_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 inline-block">
-                        View/Download Document
-                      </a>
+                      <a href={res.file_url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline mt-0.5 inline-block">View / Download</a>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteResource(res.id)}
-                      className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete PDF"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <button onClick={() => handleDeleteResource(res.id)} className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 ))}
               </div>
             )}
           </div>
         </div>
-
-      </div>
+      )}
 
       {/* Upload Modal (Reused) */}
       {showUploadModal && (

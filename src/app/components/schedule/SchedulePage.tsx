@@ -12,14 +12,15 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import { courseService, ScheduleSession } from "../../../services/courseService";
+import { courseService, scheduleService, ScheduleSession } from "../../../services/courseService";
+import { HelpCircle } from "lucide-react";
 
-const typeConfig: Record<string, { label: string; color: string; bg: string; icon: typeof Video }> = {
-  live: { label: "Live Session", color: "text-blue-800", bg: "bg-blue-100 border-blue-400", icon: Video },
+const typeConfig: Record<string, { label: string; color: string; bg: string; icon: any }> = {
+  live: { label: "Live Teaching", color: "text-blue-800", bg: "bg-blue-100 border-blue-400", icon: Video },
+  qna: { label: "Q&A / Doubt-Clearing", color: "text-amber-600", bg: "bg-amber-50 border-amber-200", icon: HelpCircle },
+  review: { label: "Project Review", color: "text-pink-600", bg: "bg-pink-50 border-pink-200", icon: CheckCircle2 },
   workshop: { label: "Workshop", color: "text-violet-600", bg: "bg-violet-50 border-violet-200", icon: Users },
-  deadline: { label: "Deadline", color: "text-red-600", bg: "bg-red-50 border-red-200", icon: AlertCircle },
-  review: { label: "Review", color: "text-pink-600", bg: "bg-pink-50 border-pink-200", icon: FileText },
-  mentoring: { label: "Mentoring", color: "text-amber-600", bg: "bg-amber-50 border-amber-200", icon: Star },
+  guest: { label: "Guest Session", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", icon: Star },
 };
 
 const dotColors: Record<string, string> = {
@@ -51,19 +52,25 @@ interface MappedSession {
 
 function mapSession(s: ScheduleSession): MappedSession {
   const d = new Date(s.scheduled_at);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  
+  // Format to WAT
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+  
+  const formatted = formatter.format(d);
+  const [datePart, timePart] = formatted.split(', ');
+  const [month, day, year] = datePart.split('/');
   const date = `${year}-${month}-${day}`;
+  const time = `${timePart} WAT`;
 
-  const hours = d.getHours();
-  const minutes = d.getMinutes();
-  const ampm = hours >= 12 ? "PM" : "AM";
-  const h = hours % 12 || 12;
-  const m = String(minutes).padStart(2, "0");
-  const time = `${h}:${m} ${ampm}`;
-
-  const duration = s.duration_minutes > 0 ? `${s.duration_minutes}min` : "-";
+  const duration = s.duration_minutes > 0 ? `${s.duration_minutes}m` : "-";
 
   return {
     id: s.id,
@@ -74,7 +81,7 @@ function mapSession(s: ScheduleSession): MappedSession {
     time,
     duration,
     tutor: s.users?.full_name || "Instructor",
-    color: s.color || "sky",
+    color: s.color || "blue",
     meeting_url: s.meeting_url ?? null,
   };
 }
@@ -167,7 +174,7 @@ export default function SchedulePage() {
   const loadSessions = async () => {
     try {
       setLoading(true);
-      const data = await courseService.getScheduleSessions();
+      const data = await scheduleService.getStudentScheduleSessions();
       setSessions(data.map(mapSession));
     } catch (err) {
       console.error("Failed to load schedule:", err);
@@ -350,29 +357,27 @@ export default function SchedulePage() {
                         </div>
                       </div>
 
-                      {item.type !== "deadline" && (
-                        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-xs text-emerald-500">
-                            <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                            Confirmed
-                          </div>
-                          {item.meeting_url ? (
-                            <a
-                              href={item.meeting_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-blue-700 text-xs font-medium hover:text-blue-800 transition-colors flex items-center gap-1"
-                            >
-                              Join Session <ChevronRight className="w-3 h-3" />
-                            </a>
-                          ) : (
-                            <button className="text-blue-700 text-xs font-medium hover:text-blue-800 transition-colors flex items-center gap-1">
-                              Add to Calendar <ChevronRight className="w-3 h-3" />
-                            </button>
-                          )}
+                      <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-500">
+                          <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                          Confirmed
                         </div>
-                      )}
+                        {item.meeting_url ? (
+                          <a
+                            href={item.meeting_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-blue-700 text-xs font-medium hover:text-blue-800 transition-colors flex items-center gap-1"
+                          >
+                            Join Session <ChevronRight className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          <button className="text-blue-700 text-xs font-medium hover:text-blue-800 transition-colors flex items-center gap-1">
+                            Add to Calendar <ChevronRight className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -424,13 +429,13 @@ export default function SchedulePage() {
               <p className="text-3xl text-blue-800 mb-1">
                 {sessions.filter((s) => s.type === "live" || s.type === "workshop").length}
               </p>
-              <p className="text-muted-foreground text-xs">Sessions</p>
+              <p className="text-muted-foreground text-xs">Live Sessions</p>
             </div>
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
               <p className="text-3xl text-amber-600 mb-1">
-                {sessions.filter((s) => s.type === "deadline").length}
+                {sessions.filter((s) => s.type === "qna" || s.type === "review").length}
               </p>
-              <p className="text-muted-foreground text-xs">Deadlines</p>
+              <p className="text-muted-foreground text-xs">Q&A / Reviews</p>
             </div>
           </div>
 

@@ -187,6 +187,12 @@ export default function CoursesPage() {
                   </div>
                 </div>
 
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm font-bold text-blue-700">
+                    {course.price ? `NGN ${course.price}` : 'Free'}
+                  </span>
+                </div>
+
                 {/* Button */}
                 <button className="w-full mt-2 py-2.5 rounded-xl text-xs font-medium transition-all duration-200 bg-blue-700 text-white hover:bg-blue-800 shadow-sm shadow-blue-200">
                   View Course

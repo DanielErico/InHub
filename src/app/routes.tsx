@@ -5,7 +5,9 @@ import AuthCallbackPage from "./components/auth/AuthCallbackPage";
 import Layout from "./components/layout/Layout";
 import DashboardPage from "./components/dashboard/DashboardPage";
 import CoursesPage from "./components/courses/CoursesPage";
+import MyCoursesPage from "./components/courses/MyCoursesPage";
 import CoursePlayerPage from "./components/courses/CoursePlayerPage";
+import CourseDetailPage from "./components/courses/CourseDetailPage";
 import AssignmentsPage from "./components/assignments/AssignmentsPage";
 import SchedulePage from "./components/schedule/SchedulePage";
 import SettingsPage from "./components/settings/SettingsPage";
@@ -22,6 +24,7 @@ import { AdminLayout } from "./components/admin/AdminLayout";
 import { DashboardPage as AdminDashboardPage } from "./components/admin/pages/DashboardPage";
 import { UsersPage as AdminUsersPage } from "./components/admin/pages/UsersPage";
 import { CoursesPage as AdminCoursesPage } from "./components/admin/pages/CoursesPage";
+import { CourseReviewPage as AdminCourseReviewPage } from "./components/admin/pages/CourseReviewPage";
 import { AssignmentsPage as AdminAssignmentsPage } from "./components/admin/pages/AssignmentsPage";
 import { AIAnalyticsPage as AdminAIAnalyticsPage } from "./components/admin/pages/AIAnalyticsPage";
 import { NotificationsPage as AdminNotificationsPage } from "./components/admin/pages/NotificationsPage";
@@ -144,7 +147,15 @@ export const router = createBrowserRouter([
         Component: CoursesPage,
       },
       {
+        path: "my-courses",
+        Component: MyCoursesPage,
+      },
+      {
         path: "course/:id",
+        Component: CourseDetailPage,
+      },
+      {
+        path: "course/:courseId/play",
         Component: CoursePlayerPage,
       },
       {
@@ -216,6 +227,10 @@ export const router = createBrowserRouter([
       {
         path: "courses",
         Component: AdminCoursesPage,
+      },
+      {
+        path: "courses/:courseId/review",
+        Component: AdminCourseReviewPage,
       },
       {
         path: "assignments",

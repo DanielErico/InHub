@@ -36,6 +36,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 
 interface User {
   id: string;
@@ -53,6 +60,7 @@ const UserMenu = ({
   user,
   actionLoading,
   setConfirmAction,
+  setViewProfileUser,
 }: {
   user: User;
   actionLoading: boolean;
@@ -61,6 +69,7 @@ const UserMenu = ({
     user: User;
     action: ActionType;
   }) => void;
+  setViewProfileUser: (user: User | null) => void;
 }) => (
   <DropdownMenu
     modal={false}
@@ -80,7 +89,10 @@ const UserMenu = ({
       align="end"
       className="bg-white text-gray-900 border border-gray-200 shadow-xl rounded-lg min-w-[180px] z-[9999]"
     >
-      <DropdownMenuItem className="text-gray-700 hover:bg-gray-100 cursor-pointer">
+      <DropdownMenuItem 
+        className="text-gray-700 hover:bg-gray-100 cursor-pointer"
+        onClick={() => setViewProfileUser(user)}
+      >
         <Eye className="w-4 h-4 mr-2" />
         View Profile
       </DropdownMenuItem>
@@ -161,6 +173,7 @@ export function UsersPage() {
     user?: User;
     action?: ActionType;
   }>({ open: false });
+  const [viewProfileUser, setViewProfileUser] = useState<User | null>(null);
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
@@ -381,6 +394,7 @@ export function UsersPage() {
                         user={user}
                         actionLoading={actionLoading}
                         setConfirmAction={setConfirmAction}
+                        setViewProfileUser={setViewProfileUser}
                       />
                     </TableCell>
                   </TableRow>
@@ -425,6 +439,7 @@ export function UsersPage() {
                 user={user}
                 actionLoading={actionLoading}
                 setConfirmAction={setConfirmAction}
+                setViewProfileUser={setViewProfileUser}
               />
             </div>
           </Card>
@@ -460,6 +475,64 @@ export function UsersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Profile Dialog */}
+      <Dialog
+        open={!!viewProfileUser}
+        onOpenChange={(open) => {
+          if (!open) setViewProfileUser(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>User Profile</DialogTitle>
+            <DialogDescription>
+              Details for {viewProfileUser?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {viewProfileUser && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-center py-4">
+                <div className="h-24 w-24 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-500 text-3xl font-semibold">
+                  {viewProfileUser.name.charAt(0).toUpperCase()}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">Full Name</p>
+                  <p className="text-sm text-gray-900">{viewProfileUser.name}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">Email Address</p>
+                  <p className="text-sm text-gray-900">{viewProfileUser.email}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">Role</p>
+                  <Badge variant="outline" className="mt-1">
+                    {viewProfileUser.role}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">Status</p>
+                  <Badge className={`mt-1 ${viewProfileUser.status === "Active" ? "bg-green-100 text-green-700 hover:bg-green-100" : "bg-red-100 text-red-700 hover:bg-red-100"}`}>
+                    {viewProfileUser.status}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-gray-500">Joined Date</p>
+                  <p className="text-sm text-gray-900">{viewProfileUser.lastActive}</p>
+                </div>
+                <div className="space-y-1 col-span-2">
+                  <p className="text-sm font-medium text-gray-500">User ID</p>
+                  <p className="text-xs text-gray-500 font-mono bg-gray-50 p-2 rounded border truncate" title={viewProfileUser.id}>
+                    {viewProfileUser.id}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

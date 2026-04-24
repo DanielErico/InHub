@@ -1,5 +1,10 @@
 import { supabase } from '../lib/supabase';
 
+export interface CourseModule {
+  title: string;
+  lessons: string[];
+}
+
 export interface Course {
   id: string;
   tutor_id: string;
@@ -7,9 +12,24 @@ export interface Course {
   category: string;
   description: string;
   thumbnail_url: string;
-  status: 'draft' | 'review' | 'published';
+  price: number;
+  status: 'draft' | 'pending_review' | 'needs_changes' | 'rejected' | 'published';
   duration: string;
   created_at: string;
+  // Extended detail fields
+  level?: 'beginner' | 'intermediate' | 'advanced';
+  language?: string;
+  learning_outcomes?: string[];
+  target_audience?: string;
+  requirements?: string[];
+  modules?: CourseModule[];
+  teaching_format?: string;
+  total_duration?: string;
+  has_assignments?: boolean;
+  assignment_count?: number;
+  has_certificate?: boolean;
+  certificate_requirements?: string;
+  preview_video_url?: string;
 }
 
 export interface Lesson {
@@ -53,10 +73,10 @@ export interface Assignment {
 
 export interface ScheduleSession {
   id: string;
-  course_id: string | null;
-  tutor_id: string | null;
+  course_id: string; // Required now
+  tutor_id: string;
   title: string;
-  type: 'live' | 'workshop' | 'deadline' | 'review' | 'mentoring';
+  type: 'live' | 'qna' | 'review' | 'workshop' | 'guest';
   scheduled_at: string;
   duration_minutes: number;
   meeting_url: string | null;
@@ -65,6 +85,108 @@ export interface ScheduleSession {
   courses?: { title: string } | null;
   users?: { full_name: string | null } | null;
 }
+
+export const scheduleService = {
+  async getTutorScheduleSessions() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from('schedule_sessions')
+      .select(`
+        *,
+        courses ( title ),
+        users ( full_name )
+      `)
+      .eq('tutor_id', user.id)
+      .order('scheduled_at', { ascending: true });
+
+    if (error) {
+      console.error("Error fetching tutor schedule:", error);
+      return [];
+    }
+    return data as ScheduleSession[];
+  },
+
+  async getStudentScheduleSessions() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    // Find courses student is enrolled in
+    const { data: purchases } = await supabase
+      .from('purchases')
+      .select('course_id')
+      .eq('user_id', user.id)
+      .eq('status', 'success');
+
+    if (!purchases || purchases.length === 0) return [];
+
+    const courseIds = purchases.map(p => p.course_id);
+
+    const { data, error } = await supabase
+      .from('schedule_sessions')
+      .select(`
+        *,
+        courses ( title ),
+        users ( full_name )
+      `)
+      .in('course_id', courseIds)
+      .order('scheduled_at', { ascending: true });
+
+    if (error) {
+      console.error("Error fetching student schedule:", error);
+      return [];
+    }
+    return data as ScheduleSession[];
+  },
+
+  async createScheduleSession(sessionData: Omit<ScheduleSession, 'id' | 'courses' | 'users' | 'tutor_id'>) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not authenticated");
+
+    // Insert the session
+    const { data: insertedSession, error } = await supabase
+      .from('schedule_sessions')
+      .insert({
+        ...sessionData,
+        tutor_id: user.id
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    // Trigger notifications for enrolled students
+    try {
+      const { data: course } = await supabase.from('courses').select('title').eq('id', sessionData.course_id).single();
+      const courseTitle = course?.title || 'a course';
+
+      // Find enrolled students
+      const { data: purchases } = await supabase
+        .from('purchases')
+        .select('user_id')
+        .eq('course_id', sessionData.course_id)
+        .eq('status', 'success');
+
+      if (purchases && purchases.length > 0) {
+        const notifications = purchases.map(p => ({
+          user_id: p.user_id,
+          title: "New Live Session Scheduled",
+          message: `A new ${sessionData.type} session "${sessionData.title}" has been scheduled for ${courseTitle}.`,
+          type: "system",
+          link: "/app/schedule"
+        }));
+
+        await supabase.from('notifications').insert(notifications);
+      }
+    } catch (notifErr) {
+      console.error("Failed to send schedule notifications:", notifErr);
+      // We don't throw here because the schedule was still created successfully
+    }
+
+    return insertedSession;
+  }
+};
 
 export const courseService = {
   // === Courses === //
@@ -83,15 +205,194 @@ export const courseService = {
     return data as Course[];
   },
 
+  async getTutorStats() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    // Get tutor's courses
+    const { data: courses } = await supabase
+      .from('courses')
+      .select('id, title, status')
+      .eq('tutor_id', user.id);
+
+    const courseIds = courses?.map(c => c.id) || [];
+    
+    // Total courses
+    const totalCourses = courseIds.length;
+    
+    // Total lessons
+    let totalLessons = 0;
+    if (courseIds.length > 0) {
+      const { count } = await supabase
+        .from('lessons')
+        .select('*', { count: 'exact', head: true })
+        .in('course_id', courseIds);
+      totalLessons = count || 0;
+    }
+
+    // Total Students (purchases)
+    let totalStudents = 0;
+    let recentPurchases: any[] = [];
+    if (courseIds.length > 0) {
+      const { data: purchases, error: purchaseError } = await supabase
+        .from('purchases')
+        .select('created_at, user_id, course_id')
+        .in('course_id', courseIds)
+        .eq('status', 'success')
+        .order('created_at', { ascending: false });
+
+      if (purchaseError) {
+        console.error("Error fetching purchases:", purchaseError);
+      }
+
+      if (purchases) {
+        // Unique students
+        const uniqueStudents = new Set(purchases.map(p => p.user_id));
+        totalStudents = uniqueStudents.size;
+        
+        // Let's get the 4 most recent purchases and fetch the student details
+        const recent = purchases.slice(0, 4);
+        
+        // We need student details and course details
+        const userIdsToFetch = [...new Set(recent.map(r => r.user_id))];
+        let userMap: Record<string, any> = {};
+        if (userIdsToFetch.length > 0) {
+          const { data: usersData } = await supabase
+            .from('users')
+            .select('id, full_name, avatar_url')
+            .in('id', userIdsToFetch);
+            
+          (usersData || []).forEach(u => { userMap[u.id] = u; });
+        }
+        
+        const courseMap = (courses || []).reduce((acc: any, c) => { acc[c.id] = c; return acc; }, {});
+        
+        recentPurchases = recent.map(r => ({
+          ...r,
+          student: userMap[r.user_id] || { full_name: 'Unknown Student' },
+          course: courseMap[r.course_id] || { title: 'Unknown Course' }
+        }));
+      }
+    }
+
+    // Recent Courses for schedule/recent section
+    const recentCourses = [...(courses || [])]
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+      .slice(0, 3);
+
+    return {
+      totalCourses,
+      totalLessons,
+      totalStudents,
+      recentPurchases,
+      recentCourses
+    };
+  },
+
+
   async getAllPublishedCourses() {
     const { data, error } = await supabase
       .from('courses')
-      .select('*, users(full_name, avatar_url)')
+      .select('*')
       .eq('status', 'published')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    if (!data || data.length === 0) return [];
+
+    // Fetch tutor info separately (FK was dropped)
+    const tutorIds = [...new Set(data.map((c: any) => c.tutor_id).filter(Boolean))];
+    let tutorMap: Record<string, { full_name: string; avatar_url: string | null }> = {};
+
+    if (tutorIds.length > 0) {
+      const { data: tutors } = await supabase
+        .from('users')
+        .select('id, full_name, avatar_url')
+        .in('id', tutorIds);
+
+      (tutors || []).forEach((t: any) => {
+        tutorMap[t.id] = { full_name: t.full_name, avatar_url: t.avatar_url };
+      });
+    }
+
+    return data.map((c: any) => ({
+      ...c,
+      users: tutorMap[c.tutor_id] || { full_name: 'Unknown Tutor', avatar_url: null }
+    }));
+  },
+
+  async getPurchasedCourses() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: purchases, error } = await supabase
+      .from('purchases')
+      .select('course_id')
+      .eq('user_id', user.id)
+      .eq('status', 'success');
+
+    if (error || !purchases || purchases.length === 0) return [];
+
+    const courseIds = purchases.map((p: any) => p.course_id);
+
+    const { data: courses, error: coursesError } = await supabase
+      .from('courses')
+      .select('*')
+      .in('id', courseIds);
+
+    if (coursesError || !courses || courses.length === 0) return [];
+
+    // Fetch tutor info separately
+    const tutorIds = [...new Set(courses.map((c: any) => c.tutor_id).filter(Boolean))];
+    let tutorMap: Record<string, { full_name: string; avatar_url: string | null }> = {};
+
+    if (tutorIds.length > 0) {
+      const { data: tutors } = await supabase
+        .from('users')
+        .select('id, full_name, avatar_url')
+        .in('id', tutorIds);
+
+      (tutors || []).forEach((t: any) => {
+        tutorMap[t.id] = { full_name: t.full_name, avatar_url: t.avatar_url };
+      });
+    }
+
+    return courses.map((c: any) => ({
+      ...c,
+      users: tutorMap[c.tutor_id] || { full_name: 'Unknown Tutor', avatar_url: null }
+    }));
+  },
+
+  async hasPurchasedCourse(courseId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data, error } = await supabase
+      .from('purchases')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('course_id', courseId)
+      .eq('status', 'success')
+      .maybeSingle();
+
+    return !!data && !error;
+  },
+
+  async recordPurchase(courseId: string, amount: number, reference: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Not authenticated");
+
+    const { error } = await supabase
+      .from('purchases')
+      .insert({
+        user_id: user.id,
+        course_id: courseId,
+        amount_paid: amount,
+        reference,
+        status: 'success'
+      });
+
+    if (error) throw error;
   },
 
   async getCourseById(id: string) {
@@ -105,7 +406,7 @@ export const courseService = {
     return data as Course;
   },
 
-  async createCourse(title: string, category: string, file: File | null) {
+  async createCourse(title: string, category: string, price: number, file: File | null) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('You must be logged in to create a course');
 
@@ -132,8 +433,9 @@ export const courseService = {
         tutor_id: user.id,
         title,
         category,
+        price,
         thumbnail_url: thumbnailUrl,
-        status: 'published',
+        status: 'draft',
       })
       .select()
       .single();
@@ -141,6 +443,47 @@ export const courseService = {
     if (error) throw error;
     return data as Course;
   },
+
+  async uploadCourseThumbnail(courseId: string, file: File): Promise<string> {
+    const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const { error: uploadError } = await supabase.storage
+      .from('course-content')
+      .upload(`thumbnails/${fileName}`, file, { cacheControl: '3600', upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabase.storage
+      .from('course-content')
+      .getPublicUrl(`thumbnails/${fileName}`);
+
+    const thumbnailUrl = publicUrlData.publicUrl;
+
+    const { error: updateError } = await supabase
+      .from('courses')
+      .update({ thumbnail_url: thumbnailUrl })
+      .eq('id', courseId);
+
+    if (updateError) throw updateError;
+
+    return thumbnailUrl;
+  },
+
+  async updateCourseStatus(courseId: string, status: Course['status']) {
+    const { error } = await supabase
+      .from('courses')
+      .update({ status })
+      .eq('id', courseId);
+    if (error) throw error;
+  },
+
+  async updateCourseDetails(courseId: string, details: Partial<Course>) {
+    const { error } = await supabase
+      .from('courses')
+      .update(details)
+      .eq('id', courseId);
+    if (error) throw error;
+  },
+
 
   // === Lessons / Videos === //
 

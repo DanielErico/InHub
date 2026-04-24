@@ -27,10 +27,12 @@ import { courseService, Course } from "../../../services/courseService";
 const statusConfig: Record<string, { label: string; className: string }> = {
   published: { label: "Published", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   draft: { label: "Draft", className: "bg-muted text-muted-foreground border-border" },
-  review: { label: "In Review", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  pending_review: { label: "In Review", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  needs_changes: { label: "Needs Changes", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200" },
 };
 
-const filters = ["All", "Published", "Draft", "In Review"];
+const filters = ["All", "Published", "Draft", "In Review", "Needs Changes", "Rejected"];
 
 type UploadType = "course" | "pdf" | "video" | null;
 
@@ -48,6 +50,7 @@ export default function TutorContentPage() {
   // Form State
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadCategory, setUploadCategory] = useState("Development");
+  const [uploadPrice, setUploadPrice] = useState("0");
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,7 +78,9 @@ export default function TutorContentPage() {
       activeFilter === "All" ||
       (activeFilter === "Published" && c.status === "published") ||
       (activeFilter === "Draft" && c.status === "draft") ||
-      (activeFilter === "In Review" && c.status === "review");
+      (activeFilter === "In Review" && c.status === "pending_review") ||
+      (activeFilter === "Needs Changes" && c.status === "needs_changes") ||
+      (activeFilter === "Rejected" && c.status === "rejected");
     return matchSearch && matchFilter;
   });
 
@@ -88,7 +93,21 @@ export default function TutorContentPage() {
   const handleModalClose = () => {
     setShowUploadModal(null);
     setUploadTitle("");
+    setUploadPrice("0");
     setFile(null);
+  };
+
+  const handleSubmitForReview = async (courseId: string) => {
+    try {
+      setUploading(true);
+      await courseService.updateCourseStatus(courseId, 'pending_review');
+      alert("Course submitted for review!");
+      fetchCourses();
+    } catch (error: any) {
+      alert(`Failed to submit: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleUploadSubmit = async () => {
@@ -102,7 +121,7 @@ export default function TutorContentPage() {
     try {
       setUploading(true);
       if (showUploadModal === "course") {
-        await courseService.createCourse(uploadTitle, uploadCategory, file);
+        await courseService.createCourse(uploadTitle, uploadCategory, parseFloat(uploadPrice) || 0, file);
       } else if (showUploadModal === "video") {
         await courseService.uploadVideo(selectedCourseId, uploadTitle, file!);
       } else if (showUploadModal === "pdf") {
@@ -238,6 +257,14 @@ export default function TutorContentPage() {
                   </button>
                   {openMenu === course.id && (
                     <div className="absolute right-0 mt-1 w-40 bg-card rounded-xl shadow-lg border border-border z-10 overflow-hidden">
+                      {(course.status === 'draft' || course.status === 'needs_changes') && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleSubmitForReview(course.id); setOpenMenu(null); }}
+                          className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Submit for Review
+                        </button>
+                      )}
                       <button 
                         onClick={(e) => { e.stopPropagation(); navigate(`/app/tutor/content/${course.id}`); }}
                         className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors"
@@ -327,6 +354,7 @@ export default function TutorContentPage() {
               </div>
 
               {showUploadModal === "course" ? (
+                <>
                 <div>
                   <label className="block text-sm font-medium text-foreground/80 mb-1.5">Category</label>
                   <div className="relative">
@@ -344,6 +372,18 @@ export default function TutorContentPage() {
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/80 pointer-events-none" />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground/80 mb-1.5">Price (NGN)</label>
+                  <input 
+                    type="number" 
+                    value={uploadPrice}
+                    onChange={(e) => setUploadPrice(e.target.value)}
+                    className="w-full border border-border rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all outline-none" 
+                    placeholder="e.g., 5000 (0 for Free)"
+                    min="0"
+                  />
+                </div>
+              </>
               ) : (
                 <div>
                   <label className="block text-sm font-medium text-foreground/80 mb-1.5">Select Course</label>

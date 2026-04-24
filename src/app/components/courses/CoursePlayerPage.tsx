@@ -30,6 +30,9 @@ import {
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { chatCompletion, streamCompletion, MODELS, PROMPTS, type ChatMessage } from "../../services/nvidia";
 import { courseService } from "../../../services/courseService";
+import { usePaystackPayment } from "react-paystack";
+import { useUserProfile } from "../../context/UserProfileContext";
+import { supabase } from "../../../lib/supabase";
 const quickPrompts = [
   "Explain this lesson simply",
   "Summarize this topic",
@@ -107,18 +110,23 @@ function AIChatMessage({ msg }: { msg: { id: string; role: string; content: stri
 }
 
 export default function CoursePlayerPage() {
-  const { id } = useParams();
+  const { courseId: id } = useParams();
   const navigate = useNavigate();
   
   const [course, setCourse] = useState<any>(null);
   const [lessons, setLessons] = useState<any[]>([]);
   const [resources, setResources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const { profile } = useUserProfile();
+  const [hasPurchased, setHasPurchased] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"notes" | "chapters" | "resources">("notes");
-  const [sidebarTab, setSidebarTab] = useState<"chat" | "lessons">("chat");
+  const [sidebarTab, setSidebarTab] = useState<"chat" | "lessons">("lessons");
 
   useEffect(() => {
     async function loadCourse() {
@@ -130,10 +138,23 @@ export default function CoursePlayerPage() {
         const lessonsData = await courseService.getLessons(id);
         const resourcesData = await courseService.getResources(id);
 
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) setUserEmail(user.email || "");
+
+        let purchased = true;
+        if (courseData.price && courseData.price > 0) {
+          purchased = await courseService.hasPurchasedCourse(id);
+        }
+        setHasPurchased(purchased);
+
         setCourse({ ...courseData, aiChapters: [] });
         setLessons(lessonsData);
         setResources(resourcesData);
-        if (lessonsData.length > 0) setActiveLesson(lessonsData[0]);
+        if (lessonsData.length > 0) {
+          setActiveLesson(lessonsData[0]);
+        } else {
+          setActiveTab("resources");
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -165,6 +186,33 @@ export default function CoursePlayerPage() {
   const [progress, setProgress] = useState(35);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Paystack Integration
+  const config = {
+    reference: (new Date()).getTime().toString(),
+    email: userEmail || "student@example.com",
+    amount: (course?.price || 0) * 100, // kobo
+    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "pk_test_dc337c699996f2a87c32d4314ef823158c5f724d",
+  };
+
+  const initializePayment = usePaystackPayment(config);
+
+  const onSuccess = async (reference: any) => {
+    try {
+      setIsProcessingPayment(true);
+      await courseService.recordPurchase(course.id, course.price, reference.reference);
+      setHasPurchased(true);
+      alert("Payment successful! Course unlocked.");
+    } catch (err: any) {
+      alert("Failed to record purchase. Please contact support.");
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const onClose = () => {
+    console.log("Payment closed");
+  };
+
   // Reset notes when switching lessons
   useEffect(() => {
     if (!activeLesson) return;
@@ -182,7 +230,7 @@ export default function CoursePlayerPage() {
     setNotesError(null);
     setNotesContent("");
 
-    const lessonIdx = lessons.indexOf(activeLesson);
+    const lessonIdx = activeLesson ? lessons.indexOf(activeLesson) : 0;
     const topics = lessons
       .slice(Math.max(0, lessonIdx - 1), lessonIdx + 2)
       .map((l) => l.title)
@@ -193,7 +241,7 @@ export default function CoursePlayerPage() {
         [
           {
             role: "user",
-            content: PROMPTS.generateNotes(course.title, activeLesson.title, topics),
+            content: PROMPTS.generateNotes(course.title, activeLesson?.title || course.title, topics),
           },
         ],
         { model: MODELS.NANO, temperature: 0.5, maxTokens: 2048 }
@@ -224,7 +272,7 @@ export default function CoursePlayerPage() {
       setIsTyping(true);
 
       // Build the conversation history for the API
-      const systemMsg = PROMPTS.studentChat(course.title, activeLesson.title);
+      const systemMsg = PROMPTS.studentChat(course.title, activeLesson?.title || "General Course Materials");
       const newHistory: ChatMessage[] = [
         systemMsg,
         ...chatHistory,
@@ -276,7 +324,6 @@ export default function CoursePlayerPage() {
 
   if (loading) return <div className="p-20 text-center text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="animate-spin w-5 h-5"/> Loading course...</div>;
   if (!course) return <div className="p-20 text-center text-muted-foreground">Course not found.</div>;
-  if (!activeLesson) return <div className="p-20 text-center text-muted-foreground">No lessons available for this course yet! Tell the tutor to upload one.</div>;
 
   return (
     <div className="flex flex-col lg:flex-row h-full">
@@ -285,21 +332,39 @@ export default function CoursePlayerPage() {
         {/* Back + Course Title */}
         <div className="px-4 sm:px-6 py-3 border-b border-border bg-card flex items-center gap-3 flex-shrink-0">
           <button
-            onClick={() => navigate("/app/courses")}
+            onClick={() => navigate(`/app/course/${id}`)}
             className="p-1.5 rounded-lg hover:bg-muted transition-colors"
           >
             <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </button>
           <div className="min-w-0">
             <h2 className="text-foreground text-sm font-semibold truncate">{course.title}</h2>
-            <p className="text-muted-foreground/80 text-xs">{activeLesson.title}</p>
+            <p className="text-muted-foreground/80 text-xs">{activeLesson?.title || "Course Overview"}</p>
           </div>
         </div>
 
         {/* Video Player */}
         <div className="relative bg-slate-950 flex-shrink-0 flex justify-center border-b border-slate-800">
           <div className="w-full max-w-3xl xl:max-w-4xl aspect-video relative overflow-hidden">
-            {activeLesson.video_url ? (
+            {!hasPurchased ? (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+                <Lock className="w-12 h-12 text-blue-500 mb-4" />
+                <h3 className="text-white text-xl font-bold mb-2">Unlock this Course</h3>
+                <p className="text-white/70 text-sm mb-6 text-center max-w-sm">
+                  Get full access to all lessons, resources, and AI features by purchasing this course.
+                </p>
+                <button
+                  onClick={() => initializePayment({ onSuccess, onClose })}
+                  disabled={isProcessingPayment}
+                  className="bg-blue-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/50 flex items-center gap-2"
+                >
+                  {isProcessingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-4 h-4" />}
+                  Buy for NGN {course.price}
+                </button>
+              </div>
+            ) : null}
+            
+            {activeLesson?.video_url && hasPurchased ? (
               <video 
                 src={activeLesson.video_url} 
                 className="w-full h-full object-cover" 
@@ -313,80 +378,83 @@ export default function CoursePlayerPage() {
                 className="w-full h-full object-cover opacity-60"
               />
             )}
-            <div className={`absolute inset-0 flex flex-col justify-between p-4 sm:p-6 ${activeLesson.video_url ? 'pointer-events-none opacity-0 hover:opacity-100 transition-opacity' : ''}`}>
-              <div className="flex items-center justify-between">
-                <div className="bg-black/40 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  <span className="text-white text-xs font-medium">LESSON {lessons.indexOf(activeLesson) + 1}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
-                    <Settings className="w-4 h-4 text-white" />
-                  </button>
-                  <button className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
-                    <Maximize className="w-4 h-4 text-white" />
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center justify-center">
-                <button
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  className="w-16 h-16 bg-blue-700/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-blue-700 transition-all shadow-xl shadow-blue-950/30 hover:scale-110 active:scale-95"
-                >
-                  {isPlaying ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 text-white fill-white ml-1" />}
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div className="group cursor-pointer">
-                  <div className="bg-card/20 rounded-full h-1 group-hover:h-1.5 transition-all">
-                    <div className="bg-blue-600 h-full rounded-full relative" style={{ width: `${progress}%` }}>
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-card rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
+            
+            {hasPurchased && activeLesson && (
+              <div className={`absolute inset-0 flex flex-col justify-between p-4 sm:p-6 ${activeLesson.video_url ? 'pointer-events-none opacity-0 hover:opacity-100 transition-opacity' : ''}`}>
+                <div className="flex items-center justify-between">
+                  <div className="bg-black/40 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-white text-xs font-medium">LESSON {lessons.indexOf(activeLesson) + 1}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
+                      <Settings className="w-4 h-4 text-white" />
+                    </button>
+                    <button className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
+                      <Maximize className="w-4 h-4 text-white" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => {
-                        const idx = lessons.indexOf(activeLesson);
-                        if (idx > 0) setActiveLesson(lessons[idx - 1]);
-                      }}
-                      className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
-                    >
-                      <SkipBack className="w-5 h-5" />
-                    </button>
-                    <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto">
-                      {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        const idx = lessons.indexOf(activeLesson);
-                        if (idx < lessons.length - 1) setActiveLesson(lessons[idx + 1]);
-                      }}
-                      className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
-                    >
-                      <SkipForward className="w-5 h-5" />
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <Volume2 className="w-4 h-4 text-white/70" />
-                      <div className="w-20 bg-card/20 rounded-full h-1 cursor-pointer">
-                        <div className="bg-card h-full rounded-full" style={{ width: `${volume}%` }} />
+                <div className="flex items-center justify-center">
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="w-16 h-16 bg-blue-700/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-blue-700 transition-all shadow-xl shadow-blue-950/30 hover:scale-110 active:scale-95 pointer-events-auto"
+                  >
+                    {isPlaying ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 text-white fill-white ml-1" />}
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div className="group cursor-pointer pointer-events-auto">
+                    <div className="bg-card/20 rounded-full h-1 group-hover:h-1.5 transition-all">
+                      <div className="bg-blue-600 h-full rounded-full relative" style={{ width: `${progress}%` }}>
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-card rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
-                    <span className="text-white/70 text-xs">
-                      {Math.floor((progress / 100) * 28)}:{String(Math.floor(((progress / 100) * 28 * 60) % 60)).padStart(2, "0")} / {activeLesson.duration}
-                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => {
+                          const idx = lessons.indexOf(activeLesson);
+                          if (idx > 0) setActiveLesson(lessons[idx - 1]);
+                        }}
+                        className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
+                      >
+                        <SkipBack className="w-5 h-5" />
+                      </button>
+                      <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto">
+                        {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          const idx = lessons.indexOf(activeLesson);
+                          if (idx < lessons.length - 1) setActiveLesson(lessons[idx + 1]);
+                        }}
+                        className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
+                      >
+                        <SkipForward className="w-5 h-5" />
+                      </button>
+                      <div className="flex items-center gap-2 pointer-events-auto">
+                        <Volume2 className="w-4 h-4 text-white/70" />
+                        <div className="w-20 bg-card/20 rounded-full h-1 cursor-pointer">
+                          <div className="bg-card h-full rounded-full" style={{ width: `${volume}%` }} />
+                        </div>
+                      </div>
+                      <span className="text-white/70 text-xs">
+                        {Math.floor((progress / 100) * 28)}:{String(Math.floor(((progress / 100) * 28 * 60) % 60)).padStart(2, "0")} / {activeLesson.duration || "0:00"}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* Tabs */}
         <div className="bg-card border-b border-border px-4 sm:px-6 flex-shrink-0">
           <div className="flex gap-1">
-            {tabs.map(({ id, icon: Icon, label }) => (
+          {tabs.map(({ id, icon: Icon, label }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id as any)}
@@ -398,6 +466,9 @@ export default function CoursePlayerPage() {
               >
                 <Icon className="w-4 h-4" />
                 <span className="hidden sm:block">{label}</span>
+                {!hasPurchased && id === "resources" && resources.length > 0 && (
+                  <Lock className="w-3 h-3 ml-0.5 text-amber-500" />
+                )}
               </button>
             ))}
           </div>
@@ -484,7 +555,7 @@ export default function CoursePlayerPage() {
                       )}
                     </div>
                     <div>
-                      <h4 className="text-foreground text-sm font-semibold">AI Notes: {activeLesson.title}</h4>
+                      <h4 className="text-foreground text-sm font-semibold">AI Notes: {activeLesson?.title || course.title}</h4>
                       <p className="text-muted-foreground/80 text-xs">
                         {isGeneratingNotes ? "Generating with AI..." : "Powered by Advanced AI"}
                       </p>
@@ -562,8 +633,27 @@ export default function CoursePlayerPage() {
                   <p className="text-muted-foreground/80 text-xs">PDFs and downloadable content</p>
                 </div>
               </div>
-              
-              {resources.length === 0 ? (
+
+              {/* Paywall for resources */}
+              {!hasPurchased && resources.length > 0 ? (
+                <div className="bg-card rounded-2xl border border-amber-200 p-10 text-center">
+                  <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <Lock className="w-7 h-7 text-amber-500" />
+                  </div>
+                  <h4 className="text-foreground font-semibold mb-2">Purchase Required</h4>
+                  <p className="text-muted-foreground text-sm max-w-xs mx-auto mb-6">
+                    This course has {resources.length} resource{resources.length !== 1 ? 's' : ''} available. Purchase the course to access all PDFs and downloadable materials.
+                  </p>
+                  <button
+                    onClick={() => initializePayment({ onSuccess, onClose })}
+                    disabled={isProcessingPayment}
+                    className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-900/20 flex items-center gap-2 mx-auto"
+                  >
+                    {isProcessingPayment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                    Buy for NGN {course.price?.toLocaleString()}
+                  </button>
+                </div>
+              ) : resources.length === 0 ? (
                 <div className="bg-card rounded-2xl border border-dashed border-border p-12 text-center">
                   <FileText className="w-8 h-8 text-slate-300 mx-auto mb-3" />
                   <p className="text-muted-foreground text-sm">No resources available for this course.</p>
@@ -633,7 +723,7 @@ export default function CoursePlayerPage() {
             </div>
             <div className="flex-1 overflow-y-auto">
               {lessons.map((lesson, i) => {
-                const isActive = lesson.id === activeLesson.id;
+                const isActive = activeLesson && lesson.id === activeLesson.id;
                 return (
                   <div
                     key={lesson.id}

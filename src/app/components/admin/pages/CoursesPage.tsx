@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { supabase } from "../../../../lib/supabase";
-import { MoreVertical, Eye, CheckCircle, Trash2 } from "lucide-react";
+import { MoreVertical, Eye, Trash2, Filter } from "lucide-react";
 
 interface Course {
   id: string;
@@ -39,37 +40,58 @@ import {
 } from "../ui/alert-dialog";
 
 export function CoursesPage() {
+  const navigate = useNavigate();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState("Pending");
   const [confirmAction, setConfirmAction] = useState<{
     open: boolean;
     course?: typeof courses[0];
-    action?: "approve" | "delete";
+    action?: "delete";
   }>({ open: false });
 
-  useEffect(() => {
-    async function fetchCourses() {
-      const { data } = await supabase
-        .from('courses')
-        .select(`
-          id,
-          title,
-          status,
-          users!tutor_id ( full_name )
-        `);
-      
-      if (data) {
-        setCourses(data.map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          tutor: c.users?.full_name || 'Unknown Tutor',
-          students: Math.floor(Math.random() * 300), // mock until enrollments table exists
-          completionRate: Math.floor(Math.random() * 100), // mock
-          status: c.status === 'published' ? 'approved' : 'pending'
-        })));
-      }
+  const fetchCourses = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('courses')
+      .select('id, title, status, tutor_id')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching courses:', error);
       setLoading(false);
+      return;
     }
+
+    if (data) {
+      // Fetch tutor names separately
+      const tutorIds = [...new Set(data.map((c: any) => c.tutor_id).filter(Boolean))];
+      let tutorMap: Record<string, string> = {};
+
+      if (tutorIds.length > 0) {
+        const { data: tutors } = await supabase
+          .from('users')
+          .select('id, full_name')
+          .in('id', tutorIds);
+        
+        (tutors || []).forEach((t: any) => {
+          tutorMap[t.id] = t.full_name || 'Unknown Tutor';
+        });
+      }
+
+      setCourses(data.map((c: any) => ({
+        id: c.id,
+        title: c.title,
+        tutor: tutorMap[c.tutor_id] || 'Unknown Tutor',
+        students: 0,
+        completionRate: 0,
+        status: c.status
+      })));
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
     fetchCourses();
   }, []);
 
@@ -78,8 +100,34 @@ export function CoursesPage() {
     setConfirmAction({ open: false });
   };
 
+  const filteredCourses = courses.filter((c) => {
+    if (activeFilter === "Pending") return c.status === "pending_review";
+    if (activeFilter === "Approved") return c.status === "published";
+    if (activeFilter === "Rejected") return c.status === "rejected" || c.status === "needs_changes";
+    if (activeFilter === "Drafts") return c.status === "draft";
+    return true; // "All"
+  });
+
   return (
     <div className="space-y-6">
+      {/* Filters */}
+      <div className="flex items-center gap-2 mb-6">
+        <Filter className="w-4 h-4 text-gray-500" />
+        {["Pending", "Approved", "Rejected", "Drafts", "All"].map((f) => (
+          <button
+            key={f}
+            onClick={() => setActiveFilter(f)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              activeFilter === f
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
       {/* Desktop Table */}
       <div className="hidden md:block">
         <Card className="border-gray-200">
@@ -94,16 +142,26 @@ export function CoursesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {courses.map((course) => (
+              {filteredCourses.map((course) => (
                 <TableRow
                   key={course.id}
                   className="hover:bg-gray-50 transition-colors"
                 >
                   <TableCell className="font-medium max-w-xs">
                     {course.title}
-                    {course.status === "pending" && (
-                      <span className="ml-2 text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
-                        Pending Review
+                    {course.status === "pending_review" && (
+                      <span className="ml-2 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                        Pending
+                      </span>
+                    )}
+                    {course.status === "needs_changes" && (
+                      <span className="ml-2 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                        Needs Changes
+                      </span>
+                    )}
+                    {course.status === "draft" && (
+                      <span className="ml-2 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                        Draft
                       </span>
                     )}
                   </TableCell>
@@ -127,24 +185,10 @@ export function CoursesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate(`/app/admin/courses/${course.id}/review`)}>
                           <Eye className="w-4 h-4 mr-2" />
-                          View Course
+                          {course.status === "pending_review" ? "Review Course" : "View Details"}
                         </DropdownMenuItem>
-                        {course.status === "pending" && (
-                          <DropdownMenuItem
-                            onClick={() =>
-                              setConfirmAction({
-                                open: true,
-                                course,
-                                action: "approve",
-                              })
-                            }
-                          >
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Approve
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuItem
                           className="text-red-600"
                           onClick={() =>
@@ -170,14 +214,19 @@ export function CoursesPage() {
 
       {/* Mobile Cards */}
       <div className="space-y-4 md:hidden">
-        {courses.map((course) => (
+        {filteredCourses.map((course) => (
           <Card key={course.id} className="p-4 border-gray-200">
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <h3 className="font-semibold text-gray-900">{course.title}</h3>
-                {course.status === "pending" && (
-                  <span className="inline-block mt-1 text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">
+                {course.status === "pending_review" && (
+                  <span className="inline-block mt-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
                     Pending Review
+                  </span>
+                )}
+                {course.status === "needs_changes" && (
+                  <span className="inline-block mt-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                    Needs Changes
                   </span>
                 )}
                 <p className="text-sm text-gray-600 mt-2">
@@ -203,20 +252,10 @@ export function CoursesPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setReviewCourseId(course.id)}>
                     <Eye className="w-4 h-4 mr-2" />
-                    View Course
+                    {course.status === "pending_review" ? "Review Course" : "View Details"}
                   </DropdownMenuItem>
-                  {course.status === "pending" && (
-                    <DropdownMenuItem
-                      onClick={() =>
-                        setConfirmAction({ open: true, course, action: "approve" })
-                      }
-                    >
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Approve
-                    </DropdownMenuItem>
-                  )}
                   <DropdownMenuItem
                     className="text-red-600"
                     onClick={() =>
@@ -240,23 +279,18 @@ export function CoursesPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirmAction.action === "delete"
-                ? "Delete Course"
-                : "Approve Course"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete Course</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmAction.action === "delete"
-                ? `Are you sure you want to delete "${confirmAction.course?.title}"? This action cannot be undone.`
-                : `Are you sure you want to approve "${confirmAction.course?.title}"?`}
+              Are you sure you want to delete "{confirmAction.course?.title}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm}>Confirm</AlertDialogAction>
+            <AlertDialogAction onClick={handleConfirm} className="bg-red-600 hover:bg-red-700">Confirm</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 }

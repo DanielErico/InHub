@@ -95,6 +95,7 @@ export default function DashboardPage() {
   const { profile } = useUserProfile();
 
   const [publishedCourses, setPublishedCourses] = useState<any[]>([]);
+  const [purchasedCourses, setPurchasedCourses] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [sessions, setSessions] = useState<ScheduleSession[]>([]);
   const [quizCount, setQuizCount] = useState(0);
@@ -108,12 +109,14 @@ export default function DashboardPage() {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const [coursesData, assignmentsData, sessionsData] = await Promise.all([
+      const [coursesData, purchasedData, assignmentsData, sessionsData] = await Promise.all([
         courseService.getAllPublishedCourses(),
+        courseService.getPurchasedCourses(),
         courseService.getAssignments(profile!.id),
         courseService.getScheduleSessions(),
       ]);
       setPublishedCourses(coursesData || []);
+      setPurchasedCourses(purchasedData || []);
       setAssignments(assignmentsData || []);
       setSessions(sessionsData || []);
     } catch (error) {
@@ -245,7 +248,7 @@ export default function DashboardPage() {
               </button>
             </div>
             <div className="space-y-3">
-              {publishedCourses.slice(0, 3).map((course) => (
+              {purchasedCourses.slice(0, 3).map((course) => (
                 <div
                   key={course.id}
                   className="bg-card rounded-2xl p-4 shadow-sm border border-border hover:shadow-md transition-all duration-200 cursor-pointer group"
@@ -295,9 +298,9 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
-              {publishedCourses.length === 0 && (
+              {purchasedCourses.length === 0 && (
                 <div className="text-sm text-muted-foreground p-4 text-center border border-dashed border-border rounded-xl">
-                  No published courses available yet.
+                  You haven't purchased any courses yet.
                 </div>
               )}
             </div>

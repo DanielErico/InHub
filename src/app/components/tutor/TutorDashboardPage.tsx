@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Users,
   TrendingUp,
@@ -12,16 +12,40 @@ import {
   ArrowRight,
   CheckCircle2,
   X,
+  BookOpen,
+  Loader2,
 } from "lucide-react";
-import { assignments, notifications } from "../../data/mockData";
+import { useUserProfile } from "../../context/UserProfileContext";
+import { courseService } from "../../../services/courseService";
+import { formatDistanceToNow } from "date-fns";
 
 export default function TutorDashboardPage() {
   const [showUploadModal, setShowUploadModal] = useState<"course" | "pdf" | "video" | null>(null);
+  const { profile } = useUserProfile();
+  
+  const [loading, setLoading] = useState(true);
+  const [statsData, setStatsData] = useState<any>(null);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  const loadStats = async () => {
+    try {
+      setLoading(true);
+      const data = await courseService.getTutorStats();
+      setStatsData(data);
+    } catch (error) {
+      console.error("Failed to load tutor stats", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stats = [
-    { label: "Active Students", value: "342", trend: "+12%", icon: Users, color: "blue" },
-    { label: "Course Completions", value: "89", trend: "+24%", icon: TrendingUp, color: "emerald" },
-    { label: "Hours Taught", value: "1,240", trend: "+18%", icon: Clock, color: "purple" },
+    { label: "Total Students", value: statsData?.totalStudents || 0, trend: "Active", icon: Users, color: "blue" },
+    { label: "Total Courses", value: statsData?.totalCourses || 0, trend: "Published", icon: BookOpen, color: "emerald" },
+    { label: "Total Lessons", value: statsData?.totalLessons || 0, trend: "Uploaded", icon: Video, color: "purple" },
   ];
 
   return (
@@ -29,7 +53,7 @@ export default function TutorDashboardPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome back, Dr. Jenkins</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Welcome back, {profile?.full_name?.split(' ')[0] || 'Tutor'}</h1>
           <p className="text-muted-foreground mt-1">Here is what is happening with your students today.</p>
         </div>
         <button className="bg-card border border-border text-foreground/80 px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted/50 transition-colors shadow-sm">
@@ -111,71 +135,71 @@ export default function TutorDashboardPage() {
           
           <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
             <div className="divide-y divide-slate-100">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <img 
-                      src={`https://i.pravatar.cc/150?img=${i + 10}`} 
-                      alt="Student" 
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                    <div>
-                      <p className="font-medium text-foreground">Student Name {i}</p>
-                      <p className="text-xs text-muted-foreground">Completed React Basics - Module {i}</p>
+              {loading ? (
+                <div className="p-8 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>
+              ) : statsData?.recentPurchases?.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">No recent student enrollments.</div>
+              ) : (
+                statsData?.recentPurchases?.map((purchase: any, i: number) => (
+                  <div key={i} className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
+                        {purchase.student?.avatar_url ? (
+                          <img src={purchase.student.avatar_url} alt={purchase.student.full_name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-white text-sm font-bold">{(purchase.student?.full_name || "S").charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate">{purchase.student?.full_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">Enrolled: {purchase.course?.title}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-medium text-foreground">Purchased</p>
+                        <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(purchase.created_at), { addSuffix: true })}</p>
+                      </div>
+                      <button className="p-2 hover:bg-slate-200 rounded-lg text-muted-foreground/80 hover:text-muted-foreground transition-colors">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-sm font-medium text-foreground">92% Grade</p>
-                      <p className="text-xs text-muted-foreground">2 hours ago</p>
-                    </div>
-                    <button className="p-2 hover:bg-slate-200 rounded-lg text-muted-foreground/80 hover:text-muted-foreground transition-colors">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
 
-        {/* Schedule */}
+        {/* Recent Courses */}
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-foreground">Upcoming Schedule</h2>
+            <h2 className="text-lg font-bold text-foreground">Recent Courses</h2>
             <button className="p-2 hover:bg-muted rounded-lg text-muted-foreground/80 hover:text-muted-foreground transition-colors">
-              <CalendarIcon className="w-5 h-5" />
+              <BookOpen className="w-5 h-5" />
             </button>
           </div>
 
           <div className="bg-card rounded-2xl border border-border shadow-sm p-5 space-y-4">
-            <div className="flex items-start gap-4">
-              <div className="w-12 pt-1 text-center">
-                <p className="text-xs font-bold text-foreground">09:00</p>
-                <p className="text-[10px] text-muted-foreground/80 uppercase">AM</p>
-              </div>
-              <div className="flex-1 bg-blue-50 border border-blue-100 rounded-xl p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-semibold text-blue-900 text-sm">1-on-1 Mentoring</p>
-                  <Video className="w-4 h-4 text-blue-600" />
+            {loading ? (
+              <div className="flex justify-center p-4"><Loader2 className="w-5 h-5 animate-spin text-blue-600" /></div>
+            ) : statsData?.recentCourses?.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No courses uploaded yet.</p>
+            ) : (
+              statsData?.recentCourses?.map((course: any) => (
+                <div key={course.id} className="flex items-start gap-4">
+                  <div className="w-12 pt-1 text-center shrink-0">
+                    <p className="text-xs font-bold text-foreground">{new Date(course.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
+                  </div>
+                  <div className={`flex-1 ${course.status === 'published' ? 'bg-emerald-50 border-emerald-100' : 'bg-blue-50 border-blue-100'} border rounded-xl p-3 min-w-0`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className={`font-semibold text-sm truncate pr-2 ${course.status === 'published' ? 'text-emerald-900' : 'text-blue-900'}`}>{course.title}</p>
+                    </div>
+                    <p className={`text-xs capitalize ${course.status === 'published' ? 'text-emerald-700' : 'text-blue-700'}`}>{course.status.replace('_', ' ')}</p>
+                  </div>
                 </div>
-                <p className="text-xs text-blue-700">with Alex Johnson</p>
-              </div>
-            </div>
-            
-            <div className="flex items-start gap-4">
-              <div className="w-12 pt-1 text-center">
-                <p className="text-xs font-bold text-foreground">01:30</p>
-                <p className="text-[10px] text-muted-foreground/80 uppercase">PM</p>
-              </div>
-              <div className="flex-1 bg-purple-50 border border-purple-100 rounded-xl p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="font-semibold text-purple-900 text-sm">Live Masterclass</p>
-                  <Users className="w-4 h-4 text-purple-600" />
-                </div>
-                <p className="text-xs text-purple-700">System Design Basics • 45 Enrolled</p>
-              </div>
-            </div>
+              ))
+            )}
           </div>
         </div>
       </div>
