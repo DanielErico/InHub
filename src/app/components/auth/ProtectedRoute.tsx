@@ -30,7 +30,7 @@ export function ProtectedRoute({
         setIsAuthenticated(true);
 
         // Check if user has required role
-        if (requiredRole && profile?.role !== requiredRole) {
+        if (requiredRole && profile?.role?.toLowerCase() !== requiredRole.toLowerCase()) {
           setIsAuthenticated(false);
           navigate("/");
           return;
