@@ -14,10 +14,10 @@ import {
   Hand,
   CheckCircle2,
   Library,
+  Loader2,
 } from "lucide-react";
-import { courses, scheduleItems, assignments } from "../../data/mockData";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
-import { courseService } from "../../../services/courseService";
+import { courseService, Assignment, ScheduleSession } from "../../../services/courseService";
 import { useUserProfile } from "../../context/UserProfileContext";
 
 function CircularProgress({ percentage, size = 88 }: { percentage: number; size?: number }) {
@@ -70,29 +70,71 @@ const progressColors: Record<string, string> = {
   Marketing: "bg-amber-500",
 };
 
+function formatSessionTime(scheduledAt: string): string {
+  const d = new Date(scheduledAt);
+  const h = d.getHours() % 12 || 12;
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const ampm = d.getHours() >= 12 ? "PM" : "AM";
+  return `${h}:${m} ${ampm}`;
+}
+
+function formatDueDate(dateStr: string | null): string {
+  if (!dateStr) return "No deadline";
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function getPendingAssignments(assignments: Assignment[]): Assignment[] {
+  return assignments.filter((a) => {
+    const hasSubmission = (a.assignment_submissions || []).length > 0;
+    return !hasSubmission;
+  });
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { profile } = useUserProfile();
+
   const [publishedCourses, setPublishedCourses] = useState<any[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [sessions, setSessions] = useState<ScheduleSession[]>([]);
+  const [quizCount, setQuizCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadDashboard() {
-      try {
-        const coursesData = await courseService.getAllPublishedCourses();
-        setPublishedCourses(coursesData || []);
-      } catch (error) {
-        console.error("Dashboard error:", error);
-      }
-    }
+    if (!profile?.id) return;
     loadDashboard();
-  }, []);
+  }, [profile?.id]);
+
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+      const [coursesData, assignmentsData, sessionsData] = await Promise.all([
+        courseService.getAllPublishedCourses(),
+        courseService.getAssignments(profile!.id),
+        courseService.getScheduleSessions(),
+      ]);
+      setPublishedCourses(coursesData || []);
+      setAssignments(assignmentsData || []);
+      setSessions(sessionsData || []);
+    } catch (error) {
+      console.error("Dashboard error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const firstName = profile?.full_name?.split(" ")[0] || "there";
+  const pendingAssignments = getPendingAssignments(assignments);
+  const nextSession = sessions.length > 0 ? sessions[0] : null;
+  const overallProgress = 0; // Will be calculated once lesson_completions table is set up
 
-  const activeCourses = publishedCourses;
-  const pendingAssignments = assignments.filter((a) => a.status === "pending");
-  const nextSession = scheduleItems[0];
-  const overallProgress = 0;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full py-32">
+        <Loader2 className="w-8 h-8 text-blue-700 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -135,8 +177,8 @@ export default function DashboardPage() {
               <BookOpen className="w-5 h-5 text-violet-500 dark:text-violet-400" />
             </div>
           </div>
-          <p className="text-2xl text-foreground mb-0.5">{activeCourses.length}</p>
-          <p className="text-muted-foreground text-xs">Active Courses</p>
+          <p className="text-2xl text-foreground mb-0.5">{publishedCourses.length}</p>
+          <p className="text-muted-foreground text-xs">Available Courses</p>
         </div>
 
         <div className="bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
@@ -166,7 +208,7 @@ export default function DashboardPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Overall Progress Card */}
+          {/* Progress Card */}
           <div className="bg-gradient-to-br from-blue-700 to-blue-900 rounded-2xl p-6 text-white relative overflow-hidden">
             <div className="absolute top-0 right-0 w-40 h-40 bg-card/10 rounded-full -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-1/3 w-24 h-24 bg-card/10 rounded-full translate-y-1/2" />
@@ -228,7 +270,6 @@ export default function DashboardPage() {
                           {course.category}
                         </span>
                       </div>
-                      {/* Tutor row with avatar */}
                       <div className="flex items-center gap-1.5 mb-2">
                         <div className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
                           {course.users?.avatar_url ? (
@@ -271,34 +312,50 @@ export default function DashboardPage() {
               <CalendarDays className="w-4 h-4 text-blue-700 dark:text-blue-400" />
               <h3 className="text-foreground text-sm font-semibold">Next Session</h3>
             </div>
-            <div className="bg-blue-100 dark:bg-blue-900/30 rounded-xl p-4 mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 bg-blue-700 dark:bg-blue-400 rounded-full animate-pulse" />
-                <span className="text-blue-800 dark:text-blue-200 text-xs font-medium uppercase tracking-wide">LIVE</span>
-              </div>
-              <h4 className="text-foreground text-sm font-semibold mb-1">{nextSession.title}</h4>
-              <p className="text-muted-foreground text-xs mb-3">{nextSession.course}</p>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  {nextSession.time}
+
+            {nextSession ? (
+              <>
+                <div className="bg-blue-100 dark:bg-blue-900/30 rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-blue-700 dark:bg-blue-400 rounded-full animate-pulse" />
+                    <span className="text-blue-800 dark:text-blue-200 text-xs font-medium uppercase tracking-wide">UPCOMING</span>
+                  </div>
+                  <h4 className="text-foreground text-sm font-semibold mb-1">{nextSession.title}</h4>
+                  <p className="text-muted-foreground text-xs mb-3">{nextSession.courses?.title || "General"}</p>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {formatSessionTime(nextSession.scheduled_at)}
+                    </div>
+                    <span>•</span>
+                    <span>{nextSession.duration_minutes > 0 ? `${nextSession.duration_minutes}min` : ""}</span>
+                  </div>
                 </div>
-                <span>•</span>
-                <span>{nextSession.duration}</span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                    {(nextSession.users?.full_name || "I").split(" ").map((n) => n[0]).join("")}
+                  </div>
+                  <span>{nextSession.users?.full_name || "Instructor"}</span>
+                </div>
+                <button
+                  onClick={() => navigate("/app/schedule")}
+                  className="w-full bg-blue-700 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-blue-800 transition-colors"
+                >
+                  View Schedule
+                </button>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <CalendarDays className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-muted-foreground text-sm">No upcoming sessions</p>
+                <button
+                  onClick={() => navigate("/app/schedule")}
+                  className="mt-3 w-full bg-blue-700 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-blue-800 transition-colors"
+                >
+                  View Schedule
+                </button>
               </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                {nextSession.tutor.split(" ").map((n) => n[0]).join("")}
-              </div>
-              <span>{nextSession.tutor}</span>
-            </div>
-            <button
-              onClick={() => navigate("/app/schedule")}
-              className="w-full bg-blue-700 text-white rounded-xl py-2.5 text-sm font-medium hover:bg-blue-800 transition-colors"
-            >
-              Join Session
-            </button>
+            )}
           </div>
 
           {/* AI Tip */}
@@ -310,45 +367,49 @@ export default function DashboardPage() {
               <h3 className="text-foreground text-sm font-semibold">AI Study Tip</h3>
             </div>
             <p className="text-muted-foreground text-xs leading-relaxed mb-3">
-              Based on your progress, you should focus on <strong>React Hooks</strong> today. You're 68% through the web dev course — just 2 more lessons to the next milestone!
+              Stay consistent — even 30 minutes of focused learning per day compounds over time. Pick a course and make progress today!
             </p>
             <button
-              onClick={() => navigate("/app/course/1")}
+              onClick={() => navigate("/app/courses")}
               className="flex items-center gap-1.5 text-violet-600 dark:text-violet-400 text-xs font-medium hover:text-violet-700"
             >
-              Continue learning <ArrowRight className="w-3.5 h-3.5" />
+              Browse courses <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Upcoming Deadlines */}
           <div className="bg-card rounded-2xl p-5 shadow-sm border border-border">
             <h3 className="text-foreground text-sm font-semibold mb-4">Upcoming Deadlines</h3>
-            <div className="space-y-3">
-              {pendingAssignments.slice(0, 3).map((assignment) => (
-                <div
-                  key={assignment.id}
-                  className="flex items-center gap-3 cursor-pointer group"
+            {pendingAssignments.length === 0 ? (
+              <p className="text-muted-foreground text-xs text-center py-2">No pending assignments 🎉</p>
+            ) : (
+              <div className="space-y-3">
+                {pendingAssignments.slice(0, 3).map((assignment) => {
+                  const isOverdue = assignment.due_date && new Date(assignment.due_date) < new Date();
+                  return (
+                    <div
+                      key={assignment.id}
+                      className="flex items-center gap-3 cursor-pointer group"
+                      onClick={() => navigate("/app/assignments")}
+                    >
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isOverdue ? "bg-red-400" : "bg-amber-400"}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-foreground text-xs font-medium truncate group-hover:text-blue-800 transition-colors">
+                          {assignment.title}
+                        </p>
+                        <p className="text-muted-foreground text-xs">Due {formatDueDate(assignment.due_date)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+                <button
                   onClick={() => navigate("/app/assignments")}
+                  className="text-blue-700 dark:text-blue-400 text-xs hover:text-blue-800 flex items-center gap-1 mt-1"
                 >
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                    assignment.priority === "high" ? "bg-red-400" :
-                    assignment.priority === "medium" ? "bg-amber-400" : "bg-emerald-400"
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-foreground text-xs font-medium truncate group-hover:text-blue-800 transition-colors">
-                      {assignment.title}
-                    </p>
-                    <p className="text-muted-foreground text-xs">Due {assignment.dueDate}</p>
-                  </div>
-                </div>
-              ))}
-              <button
-                onClick={() => navigate("/app/assignments")}
-                className="text-blue-700 dark:text-blue-400 text-xs hover:text-blue-800 flex items-center gap-1 mt-1"
-              >
-                View all assignments <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+                  View all assignments <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

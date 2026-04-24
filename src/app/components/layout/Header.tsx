@@ -1,7 +1,15 @@
-import { useState } from "react";
-import { Bell, Search, Menu, BookOpen, ClipboardList, Calendar, LayoutDashboard } from "lucide-react";
-import { notifications } from "../../data/mockData";
+import { useState, useEffect } from "react";
+import { Bell, Search, Menu, BookOpen, ClipboardList, Calendar, LayoutDashboard, Loader2 } from "lucide-react";
 import { useUserProfile } from "../../context/UserProfileContext";
+import { supabase } from "../../../lib/supabase";
+
+interface Notification {
+  id: string;
+  message: string;
+  type: string;
+  read: boolean;
+  created_at: string;
+}
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -10,13 +18,49 @@ interface HeaderProps {
 
 export function Header({ onMenuClick, title }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifList, setNotifList] = useState(notifications);
+  const [notifList, setNotifList] = useState<Notification[]>([]);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
   const { profile } = useUserProfile();
 
   const unreadCount = notifList.filter((n) => !n.read).length;
 
-  const markAllRead = () => {
+  useEffect(() => {
+    if (!profile?.id) return;
+    loadNotifications();
+  }, [profile?.id]);
+
+  const loadNotifications = async () => {
+    try {
+      setLoadingNotifs(true);
+      const { data, error } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", profile!.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (!error && data) setNotifList(data);
+    } catch (err) {
+      console.error("Failed to load notifications:", err);
+    } finally {
+      setLoadingNotifs(false);
+    }
+  };
+
+  const markAllRead = async () => {
+    if (!profile?.id || unreadCount === 0) return;
+    // Optimistic UI update
     setNotifList((prev) => prev.map((n) => ({ ...n, read: true })));
+    await supabase
+      .from("notifications")
+      .update({ read: true })
+      .eq("user_id", profile.id)
+      .eq("read", false);
+  };
+
+  const markOneRead = async (id: string) => {
+    setNotifList((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
   };
 
   const getNotifIcon = (type: string) => {
@@ -29,7 +73,18 @@ export function Header({ onMenuClick, title }: HeaderProps) {
     }
   };
 
-  // Get initials from name, fallback to "U"
+  const formatTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHrs = Math.floor(diffMins / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : (profile?.email?.[0]?.toUpperCase() ?? "U");
@@ -88,35 +143,49 @@ export function Header({ onMenuClick, title }: HeaderProps) {
                       </span>
                     )}
                   </h3>
-                  <button
-                    onClick={markAllRead}
-                    className="text-blue-700 text-xs hover:text-blue-800"
-                  >
-                    Mark all read
-                  </button>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllRead}
+                      className="text-blue-700 text-xs hover:text-blue-800"
+                    >
+                      Mark all read
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
-                  {notifList.map((notif) => (
-                    <div
-                      key={notif.id}
-                      className={`flex gap-3 px-4 py-3 border-b border-border hover:bg-muted/50 transition-colors cursor-pointer ${
-                        !notif.read ? "bg-blue-500/10" : ""
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
-                        {getNotifIcon(notif.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs leading-relaxed ${!notif.read ? "text-foreground font-medium" : "text-muted-foreground"}`}>
-                          {notif.message}
-                        </p>
-                        <p className="text-muted-foreground text-xs mt-1">{notif.time}</p>
-                      </div>
-                      {!notif.read && (
-                        <div className="w-2 h-2 bg-blue-700 rounded-full mt-1.5 flex-shrink-0" />
-                      )}
+                  {loadingNotifs ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-5 h-5 text-blue-700 animate-spin" />
                     </div>
-                  ))}
+                  ) : notifList.length === 0 ? (
+                    <div className="py-10 text-center">
+                      <Bell className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-muted-foreground text-sm">No notifications yet</p>
+                    </div>
+                  ) : (
+                    notifList.map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => markOneRead(notif.id)}
+                        className={`flex gap-3 px-4 py-3 border-b border-border hover:bg-muted/50 transition-colors cursor-pointer ${
+                          !notif.read ? "bg-blue-500/10" : ""
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
+                          {getNotifIcon(notif.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs leading-relaxed ${!notif.read ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                            {notif.message}
+                          </p>
+                          <p className="text-muted-foreground text-xs mt-1">{formatTime(notif.created_at)}</p>
+                        </div>
+                        {!notif.read && (
+                          <div className="w-2 h-2 bg-blue-700 rounded-full mt-1.5 flex-shrink-0" />
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </>

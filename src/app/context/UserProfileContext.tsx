@@ -7,6 +7,10 @@ export interface UserProfile {
   role: string | null;
   avatar_url: string | null;
   email: string | null;
+  bio: string | null;
+  location: string | null;
+  website: string | null;
+  linkedin: string | null;
 }
 
 interface UserProfileContextValue {
@@ -34,7 +38,7 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       }
       const { data } = await supabase
         .from("users")
-        .select("id, full_name, role, avatar_url")
+        .select("id, full_name, role, avatar_url, bio, location, website, linkedin")
         .eq("id", authUser.id)
         .maybeSingle();
 
@@ -44,6 +48,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         role: data?.role ?? null,
         avatar_url: data?.avatar_url ?? null,
         email: authUser.email ?? null,
+        bio: data?.bio ?? null,
+        location: data?.location ?? null,
+        website: data?.website ?? null,
+        linkedin: data?.linkedin ?? null,
       });
     } catch (err) {
       console.error("Failed to load user profile", err);

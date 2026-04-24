@@ -69,6 +69,10 @@ export default function SettingsPage() {
         ...prev,
         full_name: profile.full_name ?? "",
         email: profile.email ?? "",
+        bio: profile.bio ?? "",
+        location: profile.location ?? "",
+        website: profile.website ?? "",
+        linkedin: profile.linkedin ?? "",
       }));
       if (profile.avatar_url) {
         setAvatarPreview(profile.avatar_url);
@@ -140,6 +144,10 @@ export default function SettingsPage() {
         .upsert({
           id: profile.id,
           full_name: profileForm.full_name,
+          bio: profileForm.bio || null,
+          location: profileForm.location || null,
+          website: profileForm.website || null,
+          linkedin: profileForm.linkedin || null,
         }, { onConflict: "id" });
 
       if (error) throw error;

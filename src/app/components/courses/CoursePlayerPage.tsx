@@ -26,7 +26,7 @@ import {
   ChevronRight,
   AlertCircle,
 } from "lucide-react";
-import { courses } from "../../data/mockData";
+
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { chatCompletion, streamCompletion, MODELS, PROMPTS, type ChatMessage } from "../../services/nvidia";
 import { courseService } from "../../../services/courseService";
@@ -125,14 +125,6 @@ export default function CoursePlayerPage() {
       if (!id) return;
       setLoading(true);
       try {
-        // Fallback for mock routes
-        if (!id.includes('-')) {
-           const mockCourse = courses.find((c) => c.id === id) || courses[0];
-           setCourse(mockCourse);
-           setLessons(mockCourse.lessons);
-           setActiveLesson(mockCourse.lessons[0]);
-           return;
-        }
 
         const courseData = await courseService.getCourseById(id);
         const lessonsData = await courseService.getLessons(id);
@@ -190,8 +182,8 @@ export default function CoursePlayerPage() {
     setNotesError(null);
     setNotesContent("");
 
-    const lessonIdx = course.lessons.indexOf(activeLesson);
-    const topics = course.lessons
+    const lessonIdx = lessons.indexOf(activeLesson);
+    const topics = lessons
       .slice(Math.max(0, lessonIdx - 1), lessonIdx + 2)
       .map((l) => l.title)
       .join(", ");
@@ -216,7 +208,7 @@ export default function CoursePlayerPage() {
     } finally {
       setIsGeneratingNotes(false);
     }
-  }, [course, activeLesson]);
+  }, [course, activeLesson, lessons]);
 
   const sendMessage = useCallback(
     async (text?: string) => {
@@ -535,25 +527,31 @@ export default function CoursePlayerPage() {
                 </div>
               </div>
               <div className="bg-card rounded-2xl border border-border overflow-hidden">
-                {course.aiChapters.map((chapter, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-blue-100 transition-colors cursor-pointer border-b border-slate-50 last:border-0 group"
-                  >
-                    <div className="bg-blue-100 group-hover:bg-blue-200 rounded-lg px-2.5 py-1.5 transition-colors">
-                      <span className="text-blue-800 text-xs font-mono font-medium">{chapter.timestamp}</span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-foreground/80 text-sm group-hover:text-blue-900 transition-colors">{chapter.title}</p>
-                    </div>
-                    <Play className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                {(course.aiChapters || []).length === 0 ? (
+                  <div className="p-10 text-center">
+                    <p className="text-muted-foreground text-sm">No chapters detected yet for this lesson.</p>
                   </div>
-                ))}
+                ) : (
+                  (course.aiChapters || []).map((chapter: any, i: number) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-4 px-5 py-4 hover:bg-blue-100 transition-colors cursor-pointer border-b border-slate-50 last:border-0 group"
+                    >
+                      <div className="bg-blue-100 group-hover:bg-blue-200 rounded-lg px-2.5 py-1.5 transition-colors">
+                        <span className="text-blue-800 text-xs font-mono font-medium">{chapter.timestamp}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-foreground/80 text-sm group-hover:text-blue-900 transition-colors">{chapter.title}</p>
+                      </div>
+                      <Play className="w-4 h-4 text-slate-300 group-hover:text-blue-600 transition-colors" />
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
           {/* ============ RESOURCES TAB ============ */}
-          {activeTab === "resources" as any && (
+          {activeTab === "resources" && (
             <div className="p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-7 h-7 bg-blue-700 rounded-lg flex items-center justify-center">

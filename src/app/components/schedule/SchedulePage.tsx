@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Calendar,
   Clock,
@@ -10,8 +10,9 @@ import {
   ChevronRight,
   CheckCircle2,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
-import { scheduleItems } from "../../data/mockData";
+import { courseService, ScheduleSession } from "../../../services/courseService";
 
 const typeConfig: Record<string, { label: string; color: string; bg: string; icon: typeof Video }> = {
   live: { label: "Live Session", color: "text-blue-800", bg: "bg-blue-100 border-blue-400", icon: Video },
@@ -30,33 +31,70 @@ const dotColors: Record<string, string> = {
 };
 
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
 ];
+const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+interface MappedSession {
+  id: string;
+  title: string;
+  course: string;
+  type: string;
+  date: string;       // "YYYY-MM-DD"
+  time: string;       // "10:00 AM"
+  duration: string;   // "60min" or "-"
+  tutor: string;
+  color: string;
+  meeting_url: string | null;
+}
+
+function mapSession(s: ScheduleSession): MappedSession {
+  const d = new Date(s.scheduled_at);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const date = `${year}-${month}-${day}`;
+
+  const hours = d.getHours();
+  const minutes = d.getMinutes();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const h = hours % 12 || 12;
+  const m = String(minutes).padStart(2, "0");
+  const time = `${h}:${m} ${ampm}`;
+
+  const duration = s.duration_minutes > 0 ? `${s.duration_minutes}min` : "-";
+
+  return {
+    id: s.id,
+    title: s.title,
+    course: s.courses?.title || "General",
+    type: s.type,
+    date,
+    time,
+    duration,
+    tutor: s.users?.full_name || "Instructor",
+    color: s.color || "sky",
+    meeting_url: s.meeting_url ?? null,
+  };
+}
 
 function CalendarView({
   year,
   month,
   selectedDay,
   onSelectDay,
+  scheduledDays,
 }: {
   year: number;
   month: number;
   selectedDay: number | null;
   onSelectDay: (d: number) => void;
+  scheduledDays: Set<number>;
 }) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
-
-  const scheduledDays = new Set(
-    scheduleItems.map((s) => {
-      const d = new Date(s.date);
-      return d.getMonth() === month && d.getFullYear() === year ? d.getDate() : null;
-    }).filter(Boolean)
-  );
 
   const cells: (number | null)[] = Array(firstDay).fill(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
@@ -86,9 +124,7 @@ function CalendarView({
               key={i}
               onClick={() => day && onSelectDay(day)}
               className={`relative min-h-[52px] p-2 flex flex-col items-center border-b border-r border-slate-50 transition-all ${
-                day
-                  ? "cursor-pointer hover:bg-blue-100"
-                  : "bg-muted/50/30"
+                day ? "cursor-pointer hover:bg-blue-100" : "bg-muted/30"
               }`}
             >
               {day && (
@@ -104,9 +140,7 @@ function CalendarView({
                   >
                     {day}
                   </div>
-                  {hasEvent && (
-                    <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1" />
-                  )}
+                  {hasEvent && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-1" />}
                 </>
               )}
             </div>
@@ -118,40 +152,68 @@ function CalendarView({
 }
 
 export default function SchedulePage() {
-  const [currentMonth, setCurrentMonth] = useState(3); // April = 3 (0-indexed)
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [selectedDay, setSelectedDay] = useState<number | null>(9); // April 9
+  const today = new Date();
+  const [sessions, setSessions] = useState<MappedSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());
   const [view, setView] = useState<"calendar" | "list">("calendar");
 
-  const prevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear((y) => y - 1);
-    } else {
-      setCurrentMonth((m) => m - 1);
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
+  const loadSessions = async () => {
+    try {
+      setLoading(true);
+      const data = await courseService.getScheduleSessions();
+      setSessions(data.map(mapSession));
+    } catch (err) {
+      console.error("Failed to load schedule:", err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const prevMonth = () => {
+    if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear((y) => y - 1); }
+    else setCurrentMonth((m) => m - 1);
   };
 
   const nextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear((y) => y + 1);
-    } else {
-      setCurrentMonth((m) => m + 1);
-    }
+    if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear((y) => y + 1); }
+    else setCurrentMonth((m) => m + 1);
   };
+
+  const scheduledDays = new Set<number>(
+    sessions
+      .map((s) => {
+        const d = new Date(s.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear ? d.getDate() : null;
+      })
+      .filter((d): d is number => d !== null)
+  );
 
   const selectedDateStr = selectedDay
     ? `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(selectedDay).padStart(2, "0")}`
     : null;
 
   const selectedItems = selectedDateStr
-    ? scheduleItems.filter((s) => s.date === selectedDateStr)
-    : scheduleItems;
+    ? sessions.filter((s) => s.date === selectedDateStr)
+    : sessions;
 
-  const upcomingItems = scheduleItems.sort(
+  const upcomingItems = [...sessions].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="w-8 h-8 text-blue-700 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto">
@@ -159,7 +221,7 @@ export default function SchedulePage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl text-foreground mb-1">Schedule</h1>
-          <p className="text-muted-foreground text-sm">{scheduleItems.length} upcoming events</p>
+          <p className="text-muted-foreground text-sm">{sessions.length} upcoming events</p>
         </div>
         <div className="flex bg-muted rounded-xl p-1 w-fit">
           <button
@@ -194,16 +256,10 @@ export default function SchedulePage() {
                   {MONTH_NAMES[currentMonth]} {currentYear}
                 </h2>
                 <div className="flex gap-1">
-                  <button
-                    onClick={prevMonth}
-                    className="p-2 rounded-xl hover:bg-muted transition-colors"
-                  >
+                  <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-muted transition-colors">
                     <ChevronLeft className="w-5 h-5 text-muted-foreground" />
                   </button>
-                  <button
-                    onClick={nextMonth}
-                    className="p-2 rounded-xl hover:bg-muted transition-colors"
-                  >
+                  <button onClick={nextMonth} className="p-2 rounded-xl hover:bg-muted transition-colors">
                     <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   </button>
                 </div>
@@ -214,16 +270,17 @@ export default function SchedulePage() {
                 month={currentMonth}
                 selectedDay={selectedDay}
                 onSelectDay={setSelectedDay}
+                scheduledDays={scheduledDays}
               />
             </>
           )}
 
-          {/* Events for selected day or all */}
+          {/* Events */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-foreground font-semibold">
                 {selectedDay && view === "calendar"
-                  ? `Events on April ${selectedDay}`
+                  ? `Events on ${MONTH_NAMES[currentMonth]} ${selectedDay}`
                   : "All Upcoming Events"}
               </h3>
               {selectedDay && view === "calendar" && (
@@ -246,7 +303,6 @@ export default function SchedulePage() {
                 {(view === "calendar" ? selectedItems : upcomingItems).map((item) => {
                   const config = typeConfig[item.type] || typeConfig.live;
                   const Icon = config.icon;
-
                   return (
                     <div
                       key={item.id}
@@ -300,9 +356,21 @@ export default function SchedulePage() {
                             <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
                             Confirmed
                           </div>
-                          <button className="text-blue-700 text-xs font-medium hover:text-blue-800 transition-colors flex items-center gap-1">
-                            Add to Calendar <ChevronRight className="w-3 h-3" />
-                          </button>
+                          {item.meeting_url ? (
+                            <a
+                              href={item.meeting_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-blue-700 text-xs font-medium hover:text-blue-800 transition-colors flex items-center gap-1"
+                            >
+                              Join Session <ChevronRight className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <button className="text-blue-700 text-xs font-medium hover:text-blue-800 transition-colors flex items-center gap-1">
+                              Add to Calendar <ChevronRight className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -313,45 +381,55 @@ export default function SchedulePage() {
           </div>
         </div>
 
-        {/* Right Column - Sidebar */}
+        {/* Right Sidebar */}
         <div className="space-y-5">
-          {/* Today's Quick Summary */}
+          {/* This Week */}
           <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
             <h3 className="text-foreground text-sm font-semibold mb-4">This Week</h3>
-            <div className="space-y-1">
-              {upcomingItems.slice(0, 4).map((item) => {
-                const dot = dotColors[item.color] || "bg-slate-400";
-                return (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-muted/50 rounded-lg px-2 -mx-2 transition-colors"
-                    onClick={() => {
-                      const d = new Date(item.date);
-                      setSelectedDay(d.getDate());
-                      setView("calendar");
-                    }}
-                  >
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-foreground/80 text-xs font-medium truncate">{item.title}</p>
-                      <p className="text-muted-foreground/80 text-xs">
-                        {new Date(item.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {item.time}
-                      </p>
+            {upcomingItems.length === 0 ? (
+              <p className="text-muted-foreground text-xs text-center py-4">No upcoming events</p>
+            ) : (
+              <div className="space-y-1">
+                {upcomingItems.slice(0, 4).map((item) => {
+                  const dot = dotColors[item.color] || "bg-slate-400";
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0 cursor-pointer hover:bg-muted/50 rounded-lg px-2 -mx-2 transition-colors"
+                      onClick={() => {
+                        const d = new Date(item.date);
+                        setSelectedDay(d.getDate());
+                        setCurrentMonth(d.getMonth());
+                        setCurrentYear(d.getFullYear());
+                        setView("calendar");
+                      }}
+                    >
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-foreground/80 text-xs font-medium truncate">{item.title}</p>
+                        <p className="text-muted-foreground/80 text-xs">
+                          {new Date(item.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {item.time}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-blue-100 border border-blue-200 rounded-2xl p-4 text-center">
-              <p className="text-3xl text-blue-800 mb-1">{scheduleItems.filter((s) => s.type === "live" || s.type === "workshop").length}</p>
+              <p className="text-3xl text-blue-800 mb-1">
+                {sessions.filter((s) => s.type === "live" || s.type === "workshop").length}
+              </p>
               <p className="text-muted-foreground text-xs">Sessions</p>
             </div>
             <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 text-center">
-              <p className="text-3xl text-amber-600 mb-1">{scheduleItems.filter((s) => s.type === "deadline").length}</p>
+              <p className="text-3xl text-amber-600 mb-1">
+                {sessions.filter((s) => s.type === "deadline").length}
+              </p>
               <p className="text-muted-foreground text-xs">Deadlines</p>
             </div>
           </div>
