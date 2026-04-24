@@ -11,6 +11,9 @@ import {
   CalendarDays,
   Zap,
   ChevronRight,
+  Hand,
+  CheckCircle2,
+  Library,
 } from "lucide-react";
 import { courses, scheduleItems, assignments } from "../../data/mockData";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
@@ -96,8 +99,9 @@ export default function DashboardPage() {
       {/* Welcome Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl text-foreground mb-1">
-            Welcome back, {firstName}! 👋
+          <h1 className="text-2xl text-foreground mb-1 flex items-center gap-2">
+            Welcome back, {firstName}!
+            <Hand className="w-6 h-6 text-amber-400 inline-block" />
           </h1>
           <p className="text-muted-foreground text-sm">
             Keep up the great work and continue your learning journey!
@@ -140,7 +144,9 @@ export default function DashboardPage() {
             <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center">
               <Flame className="w-5 h-5 text-amber-500 dark:text-amber-400" />
             </div>
-            <span className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 rounded-full font-medium">🔥</span>
+            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-amber-50 dark:bg-amber-900/30">
+              <Flame className="w-4 h-4 text-amber-500" />
+            </span>
           </div>
           <p className="text-2xl text-foreground mb-0.5">0</p>
           <p className="text-muted-foreground text-xs">Day Streak</p>
@@ -171,9 +177,15 @@ export default function DashboardPage() {
                 <p className="text-blue-200 text-sm mb-3">
                   You've completed <strong>{overallProgress}%</strong> of your enrolled curriculum
                 </p>
-                <div className="flex items-center gap-4 text-xs text-blue-400">
-                  <span>✅ {0} lessons done</span>
-                  <span>📚 {publishedCourses.length} courses available</span>
+                <div className="flex items-center gap-4 text-xs text-blue-200">
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    {0} lessons done
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Library className="w-3.5 h-3.5 text-blue-300" />
+                    {publishedCourses.length} courses available
+                  </span>
                 </div>
               </div>
             </div>

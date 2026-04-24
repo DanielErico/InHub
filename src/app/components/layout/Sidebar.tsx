@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { Logo } from "../ui/Logo";
 import {
@@ -12,6 +13,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  AlertTriangle,
 } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUserProfile } from "../../context/UserProfileContext";
@@ -33,6 +35,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { profile } = useUserProfile();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -136,7 +139,7 @@ export function Sidebar({ onClose }: SidebarProps) {
               {theme === "light" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </button>
             <button
-              onClick={handleLogout}
+              onClick={() => setShowLogoutModal(true)}
               className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-50"
               title="Logout"
             >
@@ -145,6 +148,51 @@ export function Sidebar({ onClose }: SidebarProps) {
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+          onClick={() => setShowLogoutModal(false)}
+        >
+          <div
+            className="bg-background border border-border rounded-2xl shadow-2xl p-6 w-[90%] max-w-sm mx-4"
+            style={{ animation: "modalPop 0.18s ease-out" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center text-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-1">
+                <AlertTriangle className="w-6 h-6 text-red-500" />
+              </div>
+              <h2 className="text-foreground text-base font-bold">Log out of InHub?</h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                You'll need to sign in again to access your dashboard.
+              </p>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-border text-foreground text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors"
+              >
+                Yes, Log out
+              </button>
+            </div>
+          </div>
+          <style>{`
+            @keyframes modalPop {
+              from { opacity: 0; transform: scale(0.92); }
+              to   { opacity: 1; transform: scale(1); }
+            }
+          `}</style>
+        </div>
+      )}
     </div>
   );
 }

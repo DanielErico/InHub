@@ -29,6 +29,43 @@ export interface Resource {
   file_type: string;
 }
 
+export interface LessonCompletion {
+  id: string;
+  student_id: string;
+  lesson_id: string;
+  course_id: string;
+  completed_at: string;
+}
+
+export interface Assignment {
+  id: string;
+  course_id: string | null;
+  title: string;
+  description: string | null;
+  due_date: string | null;
+  points: number;
+  priority: 'low' | 'medium' | 'high';
+  created_at: string;
+  // joined
+  courses?: { title: string } | null;
+  assignment_submissions?: { id: string; status: string }[];
+}
+
+export interface ScheduleSession {
+  id: string;
+  course_id: string | null;
+  tutor_id: string | null;
+  title: string;
+  type: 'live' | 'workshop' | 'deadline' | 'review' | 'mentoring';
+  scheduled_at: string;
+  duration_minutes: number;
+  meeting_url: string | null;
+  color: string;
+  // joined
+  courses?: { title: string } | null;
+  users?: { full_name: string | null } | null;
+}
+
 export const courseService = {
   // === Courses === //
 
@@ -200,5 +237,105 @@ export const courseService = {
   async deleteResource(id: string) {
     const { error } = await supabase.from('resources').delete().eq('id', id);
     if (error) throw error;
-  }
+  },
+
+  // === Lesson Completions === //
+
+  async getStudentCompletions(studentId: string): Promise<LessonCompletion[]> {
+    try {
+      const { data, error } = await supabase
+        .from('lesson_completions')
+        .select('*')
+        .eq('student_id', studentId);
+      if (error) return [];
+      return (data as LessonCompletion[]) || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getStudentCourseCompletions(studentId: string, courseId: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('lesson_completions')
+        .select('lesson_id')
+        .eq('student_id', studentId)
+        .eq('course_id', courseId);
+      if (error) return [];
+      return (data || []).map((r: any) => r.lesson_id);
+    } catch {
+      return [];
+    }
+  },
+
+  async markLessonComplete(studentId: string, lessonId: string, courseId: string): Promise<void> {
+    try {
+      await supabase
+        .from('lesson_completions')
+        .upsert({ student_id: studentId, lesson_id: lessonId, course_id: courseId }, { onConflict: 'student_id,lesson_id' });
+    } catch {
+      // silently fail if table doesn't exist yet
+    }
+  },
+
+  // === Assignments === //
+
+  async getAssignments(studentId: string): Promise<Assignment[]> {
+    try {
+      const { data, error } = await supabase
+        .from('assignments')
+        .select('*, courses(title), assignment_submissions!left(id, status, student_id)')
+        .order('due_date', { ascending: true });
+      if (error) return [];
+      // Filter submissions to only this student
+      return ((data as any[]) || []).map((a) => ({
+        ...a,
+        assignment_submissions: (a.assignment_submissions || []).filter(
+          (s: any) => s.student_id === studentId
+        ),
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  async submitAssignment(assignmentId: string, studentId: string, file: File | null): Promise<void> {
+    let fileUrl: string | null = null;
+
+    if (file) {
+      const fileName = `submissions/${studentId}/${assignmentId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const { error: uploadError } = await supabase.storage
+        .from('course-content')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('course-content')
+        .getPublicUrl(fileName);
+      fileUrl = urlData.publicUrl;
+    }
+
+    const { error } = await supabase
+      .from('assignment_submissions')
+      .upsert(
+        { assignment_id: assignmentId, student_id: studentId, file_url: fileUrl, status: 'submitted' },
+        { onConflict: 'assignment_id,student_id' }
+      );
+    if (error) throw error;
+  },
+
+  // === Schedule === //
+
+  async getScheduleSessions(): Promise<ScheduleSession[]> {
+    try {
+      const { data, error } = await supabase
+        .from('schedule_sessions')
+        .select('*, courses(title), users(full_name)')
+        .order('scheduled_at', { ascending: true });
+      if (error) return [];
+      return (data as ScheduleSession[]) || [];
+    } catch {
+      return [];
+    }
+  },
 };
