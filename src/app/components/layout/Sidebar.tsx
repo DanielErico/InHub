@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  ShieldAlert,
+  AlertTriangle,
 } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUserProfile } from "../../context/UserProfileContext";
