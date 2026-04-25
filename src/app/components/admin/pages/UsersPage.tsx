@@ -192,7 +192,7 @@ export function UsersPage() {
         data.map((u: any) => ({
           id: u.id,
           name: u.full_name || "Unknown User",
-          email: "Protected for privacy",
+          email: u.email || "No email provided",
           role: u.role
             ? u.role.charAt(0).toUpperCase() + u.role.slice(1)
             : "Student",

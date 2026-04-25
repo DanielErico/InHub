@@ -9,15 +9,19 @@ import {
   Settings,
   LogOut,
   Sparkles,
+  ClipboardList,
   ChevronRight,
   Sun,
   Moon,
   AlertTriangle,
+  MessageSquare,
 } from "lucide-react";
 import { user } from "../../data/mockData";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUserProfile } from "../../context/UserProfileContext";
 import { supabase } from "../../../lib/supabase";
+import { messageService } from "../../../services/messageService";
+import { useEffect } from "react";
 
 interface TutorSidebarProps {
   onClose?: () => void;
@@ -27,6 +31,8 @@ const navItems = [
   { to: "/app/tutor/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/app/tutor/content", icon: FolderUp, label: "Manage Courses" },
   { to: "/app/tutor/students", icon: Users, label: "My Students" },
+  { to: "/app/tutor/assignments", icon: ClipboardList, label: "Assignments" },
+  { to: "/app/tutor/messages", icon: MessageSquare, label: "Messages" },
   { to: "/app/tutor/schedule", icon: Calendar, label: "Schedule" },
   { to: "/app/tutor/ai-tools", icon: Sparkles, label: "AI Tools" },
   { to: "/app/tutor/settings", icon: Settings, label: "Settings" },
@@ -37,6 +43,11 @@ export function TutorSidebar({ onClose }: TutorSidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const { profile } = useUserProfile();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    messageService.getUnreadCount().then(setUnreadMessages).catch(() => {});
+  }, []);
 
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -86,7 +97,12 @@ export function TutorSidebar({ onClose }: TutorSidebarProps) {
                   <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-muted-foreground"}`} />
                 </div>
                 <span className="flex-1">{label}</span>
-                {isActive && <ChevronRight className="w-4 h-4 text-blue-600" />}
+                {to === "/app/tutor/messages" && unreadMessages > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {unreadMessages > 9 ? "9+" : unreadMessages}
+                  </span>
+                )}
+                {isActive && (unreadMessages === 0 || to !== "/app/tutor/messages") && <ChevronRight className="w-4 h-4 text-blue-600" />}
               </>
             )}
           </NavLink>

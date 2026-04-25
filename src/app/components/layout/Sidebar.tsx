@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router";
 import { Logo } from "../ui/Logo";
 import {
@@ -16,10 +16,13 @@ import {
   ShieldAlert,
   AlertTriangle,
   Library,
+  MessageSquare,
 } from "lucide-react";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useUserProfile } from "../../context/UserProfileContext";
 import { supabase } from "../../../lib/supabase";
+import { cbtService } from "../../../services/cbtService";
+import { messageService } from "../../../services/messageService";
 
 interface SidebarProps {
   onClose?: () => void;
@@ -30,6 +33,7 @@ const navItems = [
   { to: "/app/courses", icon: BookOpen, label: "Browse Courses" },
   { to: "/app/my-courses", icon: Library, label: "My Courses" },
   { to: "/app/assignments", icon: ClipboardList, label: "Assignments" },
+  { to: "/app/messages", icon: MessageSquare, label: "Messages" },
   { to: "/app/schedule", icon: Calendar, label: "Schedule" },
   { to: "/app/settings", icon: Settings, label: "Settings" },
 ];
@@ -39,6 +43,18 @@ export function Sidebar({ onClose }: SidebarProps) {
   const { theme, toggleTheme } = useTheme();
   const { profile } = useUserProfile();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [unseenCount, setUnseenCount] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  useEffect(() => {
+    cbtService.getUnseenAssignmentCount().then(setUnseenCount).catch(() => {});
+    messageService.getUnreadCount().then(setUnreadMessages).catch(() => {});
+  }, []);
+
+  const handleAssignmentClick = async () => {
+    setUnseenCount(0);
+    onClose?.();
+  };
 
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -69,7 +85,7 @@ export function Sidebar({ onClose }: SidebarProps) {
           <NavLink
             key={to}
             to={to}
-            onClick={onClose}
+            onClick={to === "/app/assignments" ? handleAssignmentClick : onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group ${
                 isActive
@@ -88,7 +104,17 @@ export function Sidebar({ onClose }: SidebarProps) {
                   <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-muted-foreground"}`} />
                 </div>
                 <span className="flex-1">{label}</span>
-                {isActive && <ChevronRight className="w-4 h-4 text-blue-600" />}
+                {to === "/app/assignments" && unseenCount > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {unseenCount > 9 ? "9+" : unseenCount}
+                  </span>
+                )}
+                {to === "/app/messages" && unreadMessages > 0 && (
+                  <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {unreadMessages > 9 ? "9+" : unreadMessages}
+                  </span>
+                )}
+                {isActive && (unseenCount === 0 || to !== "/app/assignments") && (unreadMessages === 0 || to !== "/app/messages") && <ChevronRight className="w-4 h-4 text-blue-600" />}
               </>
             )}
           </NavLink>

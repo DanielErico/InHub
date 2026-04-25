@@ -1,157 +1,237 @@
 import { useState, useEffect } from "react";
 import {
-  ClipboardList,
-  Calendar,
-  Upload,
-  Sparkles,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  BookOpen,
-  Lightbulb,
-  ArrowRight,
-  X,
+  ClipboardList, Calendar, Loader2, CheckCircle2, Clock,
+  AlertCircle, BookOpen, ChevronDown, ChevronUp, Award, XCircle,
 } from "lucide-react";
-import { courseService, Assignment } from "../../../services/courseService";
+import { cbtService, Quiz, CBTQuestion, StudentAnswer } from "../../../services/cbtService";
 import { useUserProfile } from "../../context/UserProfileContext";
-
-const statusConfig = {
-  pending: { label: "Pending", color: "text-amber-600 bg-amber-50 border-amber-200", icon: Clock },
-  submitted: { label: "Submitted", color: "text-emerald-600 bg-emerald-50 border-emerald-200", icon: CheckCircle2 },
-  overdue: { label: "Overdue", color: "text-red-600 bg-red-50 border-red-200", icon: AlertCircle },
-};
-
-const priorityConfig = {
-  high: { label: "High", color: "bg-red-100 text-red-600" },
-  medium: { label: "Medium", color: "bg-amber-100 text-amber-600" },
-  low: { label: "Low", color: "bg-emerald-100 text-emerald-600" },
-};
-
-function getStatus(a: Assignment): "pending" | "submitted" | "overdue" {
-  if ((a.assignment_submissions || []).length > 0) return "submitted";
-  if (a.due_date && new Date(a.due_date) < new Date()) return "overdue";
-  return "pending";
-}
 
 function formatDueDate(dateStr: string | null): string {
   if (!dateStr) return "No deadline";
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(dateStr).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-interface AIHelperState {
-  isOpen: boolean;
-  isLoading: boolean;
-  isLoaded: boolean;
-  hints: { breakdown: string[]; hints: string[]; steps: string[] } | null;
+// ── CBT Exam Component ────────────────────────────────────────
+function CBTExam({ quiz, onSubmit }: { quiz: Quiz & { submission: any }; onSubmit: () => void }) {
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ score: number; maxScore: number; passed: boolean | null; answers: StudentAnswer[] } | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(
+    quiz.time_limit_minutes ? quiz.time_limit_minutes * 60 : null
+  );
+
+  // countdown timer
+  useEffect(() => {
+    if (timeLeft === null || timeLeft <= 0) return;
+    const t = setTimeout(() => setTimeLeft(p => (p !== null ? p - 1 : null)), 1000);
+    return () => clearTimeout(t);
+  }, [timeLeft]);
+
+  const allAnswered = quiz.questions.every((_, i) => answers[i] !== undefined && answers[i] !== "");
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const builtAnswers: StudentAnswer[] = quiz.questions.map((q, i) => ({
+        questionIndex: i,
+        answer: answers[i] || "",
+      }));
+      const res = await cbtService.submitQuizAttempt(quiz.id, quiz.questions, builtAnswers);
+      setResult({
+        score: res.score,
+        maxScore: res.maxScore,
+        passed: res.submission.passed,
+        answers: res.submission.answers || builtAnswers,
+      });
+    } catch (err: any) {
+      alert("Submission failed: " + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Score screen after submission
+  if (result) {
+    const pct = result.maxScore > 0 ? Math.round((result.score / result.maxScore) * 100) : 0;
+    const theoryPending = quiz.questions.some(q => q.type === "theory");
+    return (
+      <div className="space-y-6">
+        {/* Score card */}
+        <div className={`rounded-2xl border p-7 text-center ${result.passed === true ? "bg-emerald-50 border-emerald-200" : result.passed === false ? "bg-red-50 border-red-200" : "bg-blue-50 border-blue-200"}`}>
+          <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold ${result.passed === true ? "bg-emerald-100 text-emerald-700" : result.passed === false ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+            {pct}%
+          </div>
+          <h3 className="text-xl font-bold text-foreground mb-1">
+            {result.passed === true ? "🎉 Passed!" : result.passed === false ? "Assignment Failed" : "Submitted!"}
+          </h3>
+          <p className="text-muted-foreground text-sm">
+            MCQ Score: <strong>{result.score}/{quiz.questions.filter(q => q.type !== "theory").reduce((a, q) => a + (q.points ?? 1), 0)}</strong>
+          </p>
+          {theoryPending && (
+            <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-amber-700 text-sm">
+              <Clock className="inline w-4 h-4 mr-1" />Theory questions are being reviewed by your tutor.
+            </div>
+          )}
+        </div>
+
+        {/* Review answers */}
+        <div className="space-y-4">
+          <h4 className="font-semibold text-foreground">Answer Review</h4>
+          {quiz.questions.map((q, i) => {
+            const a = result.answers[i];
+            const isTheory = q.type === "theory";
+            const isCorrect = !isTheory && a?.isCorrect;
+            return (
+              <div key={i} className={`rounded-xl border p-4 ${isTheory ? "border-purple-100 bg-purple-50/40" : isCorrect ? "border-emerald-100 bg-emerald-50/40" : "border-red-100 bg-red-50/40"}`}>
+                <div className="flex items-start gap-2 mb-2">
+                  {isTheory ? <Clock className="w-4 h-4 text-purple-500 flex-shrink-0 mt-0.5" /> : isCorrect ? <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />}
+                  <p className="text-sm font-medium text-foreground">{q.question}</p>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">Your answer: <span className="font-medium text-foreground">{a?.answer || "—"}</span></p>
+                {!isTheory && !isCorrect && <p className="text-xs text-emerald-700 ml-6 mt-0.5">Correct: {q.correctAnswer}</p>}
+                {!isTheory && q.explanation && <p className="text-xs text-muted-foreground ml-6 mt-0.5 italic">{q.explanation}</p>}
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={onSubmit} className="w-full py-2.5 rounded-xl bg-blue-700 text-white text-sm font-medium hover:bg-blue-800 transition-colors">
+          Back to Assignments
+        </button>
+      </div>
+    );
+  }
+
+  // Already submitted view
+  if (quiz.submission) {
+    const sub = quiz.submission;
+    const pct = sub.max_score > 0 ? Math.round((sub.total_score / sub.max_score) * 100) : 0;
+    return (
+      <div className={`rounded-2xl border p-7 text-center ${sub.passed === true ? "bg-emerald-50 border-emerald-200" : sub.passed === false ? "bg-red-50 border-red-200" : "bg-blue-50 border-blue-200"}`}>
+        <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center text-2xl font-bold ${sub.passed === true ? "bg-emerald-100 text-emerald-700" : sub.passed === false ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+          {pct}%
+        </div>
+        <h3 className="text-xl font-bold text-foreground mb-1">{sub.passed === true ? "🎉 Passed!" : sub.passed === false ? "Failed" : "Awaiting Review"}</h3>
+        <p className="text-muted-foreground text-sm">Score: {sub.total_score ?? sub.score}/{sub.max_score ?? "?"} pts</p>
+        <p className="text-xs text-muted-foreground mt-2">Submitted {new Date(sub.completed_at).toLocaleDateString()}</p>
+      </div>
+    );
+  }
+
+  // Exam UI
+  return (
+    <div className="space-y-6">
+      {/* Timer */}
+      {timeLeft !== null && (
+        <div className={`flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl w-fit ${timeLeft < 60 ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+          <Clock className="w-4 h-4" />
+          {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, "0")} remaining
+        </div>
+      )}
+
+      {quiz.description && (
+        <div className="bg-muted/40 rounded-xl px-4 py-3 text-sm text-muted-foreground border border-border">
+          {quiz.description}
+        </div>
+      )}
+
+      {quiz.questions.map((q: CBTQuestion, i: number) => (
+        <div key={i} className="bg-card border border-border rounded-2xl p-5 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+              <p className="text-sm font-semibold text-foreground">{q.question}</p>
+            </div>
+            <span className="text-xs text-muted-foreground flex-shrink-0">{q.points ?? 1} pt{(q.points ?? 1) > 1 ? "s" : ""}</span>
+          </div>
+
+          {/* MCQ options */}
+          {(q.type === "mcq" || !q.type) && (
+            <div className="space-y-2 pl-10">
+              {(q.options || []).map((opt: string, oi: number) => (
+                <label key={oi} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${answers[i] === opt ? "border-blue-500 bg-blue-50 text-blue-800" : "border-border hover:border-blue-300 hover:bg-muted/30"}`}>
+                  <input type="radio" name={`q-${i}`} value={opt} checked={answers[i] === opt} onChange={() => setAnswers(p => ({ ...p, [i]: opt }))} className="accent-blue-600" />
+                  <span className="text-sm">{String.fromCharCode(65 + oi)}. {opt}</span>
+                </label>
+              ))}
+            </div>
+          )}
+
+          {/* Theory text area */}
+          {q.type === "theory" && (
+            <div className="pl-10">
+              <textarea
+                rows={4}
+                placeholder="Type your answer here..."
+                value={answers[i] || ""}
+                onChange={e => setAnswers(p => ({ ...p, [i]: e.target.value }))}
+                className="w-full border border-border rounded-xl px-4 py-3 text-sm resize-none focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none bg-background transition-all"
+              />
+            </div>
+          )}
+        </div>
+      ))}
+
+      <button
+        onClick={handleSubmit}
+        disabled={submitting || !allAnswered}
+        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 text-white font-semibold text-sm hover:from-blue-800 hover:to-indigo-800 transition-all shadow-lg shadow-blue-200 disabled:opacity-50"
+      >
+        {submitting ? <><Loader2 className="inline w-4 h-4 animate-spin mr-2" />Submitting...</> : "Submit Assignment"}
+      </button>
+      {!allAnswered && <p className="text-center text-xs text-muted-foreground">Please answer all questions before submitting.</p>}
+    </div>
+  );
 }
 
-const defaultHints = {
-  breakdown: [
-    "Read the assignment description carefully",
-    "Plan your approach before writing",
-    "Research relevant concepts",
-    "Draft your solution",
-    "Review and refine your work",
-  ],
-  hints: [
-    "Break the problem into smaller tasks",
-    "Look for examples in course materials",
-    "Don't hesitate to revisit earlier lessons",
-    "Test your solution step by step",
-  ],
-  steps: [
-    "1. Understand what is being asked",
-    "2. Gather resources and references",
-    "3. Create an outline or plan",
-    "4. Write your first draft",
-    "5. Review, refine and submit",
-  ],
-};
-
+// ── Main AssignmentsPage ───────────────────────────────────────
 export default function AssignmentsPage() {
   const { profile } = useUserProfile();
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [quizzes, setQuizzes] = useState<(Quiz & { submission: any })[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<"all" | "pending" | "submitted">("all");
+  const [openQuizId, setOpenQuizId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [aiHelpers, setAiHelpers] = useState<Record<string, AIHelperState>>({});
-  const [uploadedFiles, setUploadedFiles] = useState<Record<string, File | null>>({});
-  const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
-  const [submitSuccess, setSubmitSuccess] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!profile?.id) return;
-    loadAssignments();
+    load();
   }, [profile?.id]);
 
-  const loadAssignments = async () => {
+  const load = async () => {
     try {
       setLoading(true);
-      const data = await courseService.getAssignments(profile!.id);
-      setAssignments(data);
-      if (data.length > 0) setExpandedId(data[0].id);
+      await cbtService.markAssignmentNotificationsSeen();
+      const data = await cbtService.getStudentQuizzes();
+      setQuizzes(data as any);
+      if (data.length > 0 && !expandedId) setExpandedId(data[0].id);
     } catch (err) {
-      console.error("Failed to load assignments:", err);
+      console.error("Failed to load quizzes:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (assignmentId: string) => {
-    if (!profile?.id) return;
-    setSubmitting((p) => ({ ...p, [assignmentId]: true }));
-    try {
-      await courseService.submitAssignment(assignmentId, profile.id, uploadedFiles[assignmentId] ?? null);
-      setSubmitSuccess((p) => ({ ...p, [assignmentId]: true }));
-      await loadAssignments();
-    } catch (err) {
-      console.error("Submit failed:", err);
-    } finally {
-      setSubmitting((p) => ({ ...p, [assignmentId]: false }));
-    }
-  };
-
-  const pending = assignments.filter((a) => getStatus(a) === "pending");
-  const submitted = assignments.filter((a) => getStatus(a) === "submitted");
-
-  const filtered = assignments.filter((a) => {
-    if (activeFilter === "all") return true;
-    if (activeFilter === "pending") return getStatus(a) === "pending" || getStatus(a) === "overdue";
-    return getStatus(a) === "submitted";
+  const pending = quizzes.filter(q => !q.submission);
+  const submitted = quizzes.filter(q => !!q.submission);
+  const filtered = quizzes.filter(q => {
+    if (activeFilter === "pending") return !q.submission;
+    if (activeFilter === "submitted") return !!q.submission;
+    return true;
   });
 
-  const toggleAssignment = (id: string) => {
-    setExpandedId(expandedId === id ? null : id);
-  };
+  if (loading) return <div className="flex items-center justify-center py-32"><Loader2 className="w-8 h-8 text-blue-700 animate-spin" /></div>;
 
-  const getAIHelp = (id: string) => {
-    setAiHelpers((prev) => ({
-      ...prev,
-      [id]: { isOpen: true, isLoading: true, isLoaded: false, hints: null },
-    }));
-    setTimeout(() => {
-      setAiHelpers((prev) => ({
-        ...prev,
-        [id]: { isOpen: true, isLoading: false, isLoaded: true, hints: defaultHints },
-      }));
-    }, 2000);
-  };
-
-  const closeAIHelper = (id: string) => {
-    setAiHelpers((prev) => ({ ...prev, [id]: { ...prev[id], isOpen: false } }));
-  };
-
-  if (loading) {
+  // Full-screen CBT exam
+  if (openQuizId) {
+    const quiz = quizzes.find(q => q.id === openQuizId);
+    if (!quiz) return null;
     return (
-      <div className="flex items-center justify-center py-32">
-        <Loader2 className="w-8 h-8 text-blue-700 animate-spin" />
+      <div className="p-4 sm:p-6 max-w-3xl mx-auto">
+        <button onClick={() => setOpenQuizId(null)} className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-sm mb-6 transition-colors">
+          <ChevronUp className="w-4 h-4 rotate-[-90deg]" /> Back
+        </button>
+        <h2 className="text-2xl font-bold text-foreground mb-6">{quiz.title}</h2>
+        <CBTExam quiz={quiz} onSubmit={() => { setOpenQuizId(null); load(); }} />
       </div>
     );
   }
@@ -161,35 +241,22 @@ export default function AssignmentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl text-foreground mb-1">Assignments</h1>
-          <p className="text-muted-foreground text-sm">
-            {pending.length} pending · {submitted.length} submitted
-          </p>
+          <h1 className="text-2xl font-bold text-foreground mb-1">Assignments</h1>
+          <p className="text-muted-foreground text-sm">{pending.length} pending · {submitted.length} submitted</p>
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Tabs */}
       <div className="flex gap-2 mb-6">
-        {(["all", "pending", "submitted"] as const).map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setActiveFilter(filter)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 capitalize ${
-              activeFilter === filter
-                ? "bg-blue-700 text-white shadow-sm"
-                : "bg-card text-muted-foreground border border-border hover:border-blue-500 hover:text-blue-600"
-            }`}
-          >
-            {filter === "all"
-              ? `All (${assignments.length})`
-              : filter === "pending"
-              ? `Pending (${pending.length})`
-              : `Submitted (${submitted.length})`}
+        {(["all", "pending", "submitted"] as const).map(f => (
+          <button key={f} onClick={() => setActiveFilter(f)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all capitalize ${activeFilter === f ? "bg-blue-700 text-white shadow-sm" : "bg-card text-muted-foreground border border-border hover:border-blue-500 hover:text-blue-600"}`}>
+            {f === "all" ? `All (${quizzes.length})` : f === "pending" ? `Pending (${pending.length})` : `Submitted (${submitted.length})`}
           </button>
         ))}
       </div>
 
-      {/* Assignments List */}
+      {/* List */}
       {filtered.length === 0 ? (
         <div className="text-center py-16 bg-card rounded-2xl border border-dashed border-border">
           <ClipboardList className="w-12 h-12 text-slate-300 mx-auto mb-3" />
@@ -197,264 +264,72 @@ export default function AssignmentsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {filtered.map((assignment) => {
-            const statusKey = getStatus(assignment);
-            const isExpanded = expandedId === assignment.id;
-            const status = statusConfig[statusKey];
-            const priority = priorityConfig[(assignment.priority as keyof typeof priorityConfig) || "medium"];
-            const StatusIcon = status.icon;
-            const aiHelper = aiHelpers[assignment.id];
-            const file = uploadedFiles[assignment.id];
+          {filtered.map(quiz => {
+            const isSubmitted = !!quiz.submission;
+            const isExpanded = expandedId === quiz.id;
+            const isOverdue = !isSubmitted && quiz.due_date && new Date(quiz.due_date) < new Date();
+            const statusLabel = isSubmitted ? "Submitted" : isOverdue ? "Overdue" : "Pending";
+            const statusCls = isSubmitted ? "bg-emerald-100 text-emerald-700 border-emerald-200" : isOverdue ? "bg-red-100 text-red-700 border-red-200" : "bg-amber-100 text-amber-700 border-amber-200";
 
             return (
-              <div
-                key={assignment.id}
-                className={`bg-card rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 ${
-                  isExpanded ? "border-blue-400 shadow-md" : "border-border hover:border-blue-200"
-                }`}
-              >
-                {/* Assignment Header */}
-                <div
-                  className="flex items-start gap-4 p-5 cursor-pointer"
-                  onClick={() => toggleAssignment(assignment.id)}
-                >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    statusKey === "submitted" ? "bg-emerald-50" : "bg-blue-100"
-                  }`}>
-                    <ClipboardList className={`w-5 h-5 ${statusKey === "submitted" ? "text-emerald-500" : "text-blue-700"}`} />
+              <div key={quiz.id} className={`bg-card rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 ${isExpanded ? "border-blue-400 shadow-md" : "border-border hover:border-blue-200"}`}>
+                {/* Header row */}
+                <div className="flex items-start gap-4 p-5 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : quiz.id)}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isSubmitted ? "bg-emerald-50" : "bg-blue-100"}`}>
+                    <ClipboardList className={`w-5 h-5 ${isSubmitted ? "text-emerald-500" : "text-blue-700"}`} />
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-start gap-2 mb-1.5">
-                      <h3 className="text-foreground text-sm font-semibold flex-1 min-w-0">{assignment.title}</h3>
+                      <h3 className="text-foreground text-sm font-semibold flex-1 min-w-0">{quiz.title}</h3>
                       <div className="flex gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${status.color}`}>
-                          {status.label}
-                        </span>
-                        {priority && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${priority.color}`}>
-                            {priority.label}
-                          </span>
-                        )}
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${statusCls}`}>{statusLabel}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">CBT</span>
                       </div>
                     </div>
-
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <BookOpen className="w-3.5 h-3.5" />
-                        {assignment.courses?.title || "General"}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" />
-                        Due {formatDueDate(assignment.due_date)}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <StatusIcon className="w-3.5 h-3.5" />
-                        {assignment.points} pts
-                      </div>
+                      <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" />{quiz.questions.length} questions</span>
+                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Due {formatDueDate(quiz.due_date)}</span>
+                      {quiz.time_limit_minutes && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{quiz.time_limit_minutes} min</span>}
+                      <span className="flex items-center gap-1"><Award className="w-3.5 h-3.5" />{quiz.questions.reduce((a, q) => a + (q.points ?? 1), 0)} pts total</span>
                     </div>
                   </div>
-
                   <button className="text-muted-foreground flex-shrink-0 p-1 hover:bg-muted rounded-lg">
                     {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                   </button>
                 </div>
 
+                {/* Expanded */}
                 {isExpanded && (
-                  <div className="px-5 pb-5 space-y-5 border-t border-border pt-4">
-                    {/* Description */}
-                    <div>
-                      <h4 className="text-foreground text-sm font-medium mb-2">Assignment Description</h4>
-                      <p className="text-muted-foreground text-sm leading-relaxed">
-                        {assignment.description || "No description provided."}
-                      </p>
-                    </div>
-
-                    {/* Submit */}
-                    {statusKey === "pending" && (
-                      <div>
-                        <h4 className="text-foreground text-sm font-medium mb-2">Submit Your Work</h4>
-                        <label
-                          className={`flex flex-col items-center justify-center gap-3 border-2 border-dashed rounded-2xl p-8 cursor-pointer transition-all ${
-                            file
-                              ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20"
-                              : "border-border hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          }`}
-                        >
-                          <input
-                            type="file"
-                            className="hidden"
-                            onChange={(e) => {
-                              if (e.target.files?.[0]) {
-                                setUploadedFiles((prev) => ({ ...prev, [assignment.id]: e.target.files![0] }));
-                              }
-                            }}
-                          />
-                          {file ? (
-                            <>
-                              <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-                              <div className="text-center">
-                                <p className="text-emerald-700 text-sm font-medium">File Selected</p>
-                                <p className="text-emerald-500 text-xs">{file.name}</p>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center">
-                                <Upload className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                              </div>
-                              <div className="text-center">
-                                <p className="text-foreground text-sm font-medium">Drop files here or click to upload</p>
-                                <p className="text-muted-foreground text-xs mt-1">PDF, ZIP, or any document format</p>
-                              </div>
-                            </>
-                          )}
-                        </label>
-                        {file && (
-                          <button
-                            onClick={() => handleSubmit(assignment.id)}
-                            disabled={submitting[assignment.id]}
-                            className="mt-3 w-full bg-emerald-500 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
-                          >
-                            {submitting[assignment.id] ? (
-                              <><Loader2 className="w-4 h-4 animate-spin" /> Submitting...</>
-                            ) : submitSuccess[assignment.id] ? (
-                              <><CheckCircle2 className="w-4 h-4" /> Submitted!</>
-                            ) : (
-                              "Submit Assignment"
-                            )}
-                          </button>
-                        )}
-                      </div>
+                  <div className="px-5 pb-5 border-t border-border pt-4 space-y-4">
+                    {quiz.description && (
+                      <p className="text-muted-foreground text-sm leading-relaxed">{quiz.description}</p>
                     )}
-
-                    {/* AI Helper */}
-                    {statusKey === "pending" && (
-                      <div>
-                        {(!aiHelper || !aiHelper.isOpen) && (
-                          <button
-                            onClick={() => getAIHelp(assignment.id)}
-                            className="flex items-center gap-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white px-5 py-3 rounded-xl text-sm font-medium hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg shadow-violet-100"
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            Get Help with this Assignment
-                          </button>
-                        )}
-
-                        {aiHelper?.isOpen && (
-                          <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-100 rounded-2xl overflow-hidden">
-                            <div className="flex items-center justify-between px-5 py-4 border-b border-violet-100">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 bg-violet-500 rounded-xl flex items-center justify-center">
-                                  <Sparkles className="w-4 h-4 text-white" />
-                                </div>
-                                <div>
-                                  <h4 className="text-violet-900 text-sm font-semibold">AI Assignment Assistant</h4>
-                                  <p className="text-violet-400 text-xs">Providing hints, not answers</p>
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => closeAIHelper(assignment.id)}
-                                className="p-1.5 hover:bg-violet-100 rounded-lg transition-colors"
-                              >
-                                <X className="w-4 h-4 text-violet-400" />
-                              </button>
-                            </div>
-
-                            {aiHelper.isLoading && (
-                              <div className="p-6 space-y-4">
-                                <div className="flex items-center gap-3 text-violet-600">
-                                  <Loader2 className="w-5 h-5 animate-spin" />
-                                  <span className="text-sm">Analyzing your assignment...</span>
-                                </div>
-                                {[1, 2, 3].map((i) => (
-                                  <div key={i} className="space-y-2">
-                                    <div className="h-3 bg-violet-100 rounded animate-pulse w-28" />
-                                    <div className="h-3 bg-violet-100 rounded animate-pulse w-full" />
-                                    <div className="h-3 bg-violet-100 rounded animate-pulse w-4/5" />
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {aiHelper.isLoaded && aiHelper.hints && (
-                              <div className="p-5 space-y-5">
-                                <div>
-                                  <h5 className="text-violet-700 text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                                    <ClipboardList className="w-3.5 h-3.5" />
-                                    Assignment Breakdown
-                                  </h5>
-                                  <ul className="space-y-2">
-                                    {aiHelper.hints.breakdown.map((item, i) => (
-                                      <li key={i} className="flex items-start gap-2.5 text-foreground/80 text-sm">
-                                        <div className="w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-xs flex items-center justify-center flex-shrink-0 mt-0.5 font-medium">
-                                          {i + 1}
-                                        </div>
-                                        {item}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-
-                                <div>
-                                  <h5 className="text-violet-700 text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                                    <Lightbulb className="w-3.5 h-3.5" />
-                                    Helpful Hints
-                                  </h5>
-                                  <div className="space-y-2">
-                                    {aiHelper.hints.hints.map((hint, i) => (
-                                      <div key={i} className="flex items-start gap-2.5 bg-card/70 rounded-xl px-4 py-3">
-                                        <span className="text-amber-500">💡</span>
-                                        <p className="text-muted-foreground text-sm">{hint}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <h5 className="text-violet-700 text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                                    <ArrowRight className="w-3.5 h-3.5" />
-                                    Suggested Steps
-                                  </h5>
-                                  <div className="space-y-2">
-                                    {aiHelper.hints.steps.map((step, i) => (
-                                      <div key={i} className="text-muted-foreground text-sm bg-card/70 rounded-xl px-4 py-2.5">
-                                        {step}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
-                                  <p className="text-amber-700 text-xs">
-                                    <strong>Note:</strong> These are hints to guide your thinking — complete the work yourself for the best learning outcome! 🎯
-                                  </p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {statusKey === "submitted" && (
+                    {isSubmitted ? (
                       <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-5 py-4 flex items-center gap-3">
                         <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                         <div>
                           <p className="text-emerald-700 text-sm font-medium">Assignment Submitted</p>
-                          <p className="text-emerald-500 text-xs">Awaiting tutor review</p>
+                          <p className="text-emerald-500 text-xs">
+                            Score: {quiz.submission.total_score ?? quiz.submission.score}/{quiz.submission.max_score ?? "?"} ·{" "}
+                            {quiz.submission.passed === true ? "Passed 🎉" : quiz.submission.passed === false ? "Failed" : "Awaiting tutor review"}
+                          </p>
                         </div>
                       </div>
-                    )}
-
-                    {statusKey === "overdue" && (
+                    ) : isOverdue ? (
                       <div className="bg-red-50 border border-red-100 rounded-xl px-5 py-4 flex items-center gap-3">
                         <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
                         <div>
                           <p className="text-red-700 text-sm font-medium">Assignment Overdue</p>
-                          <p className="text-red-500 text-xs">Contact your tutor if you need an extension</p>
+                          <p className="text-red-500 text-xs">Contact your tutor if you need an extension.</p>
                         </div>
                       </div>
+                    ) : (
+                      <button
+                        onClick={() => setOpenQuizId(quiz.id)}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 text-white font-semibold text-sm hover:from-blue-800 hover:to-indigo-800 transition-all shadow-md shadow-blue-200"
+                      >
+                        Start CBT Exam
+                      </button>
                     )}
                   </div>
                 )}

@@ -289,6 +289,65 @@ export const courseService = {
     };
   },
 
+  async getTutorStudents() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: courses } = await supabase
+      .from('courses')
+      .select('id, title')
+      .eq('tutor_id', user.id);
+
+    if (!courses || courses.length === 0) return [];
+    const courseMap = courses.reduce((acc: any, c) => { acc[c.id] = c.title; return acc; }, {});
+    const courseIds = courses.map(c => c.id);
+
+    const { data: purchases } = await supabase
+      .from('purchases')
+      .select('user_id, course_id, created_at')
+      .in('course_id', courseIds)
+      .eq('status', 'success')
+      .order('created_at', { ascending: false });
+
+    if (!purchases || purchases.length === 0) return [];
+
+    const userIds = [...new Set(purchases.map(p => p.user_id))];
+    const { data: usersData } = await supabase
+      .from('users')
+      .select('id, full_name, email, avatar_url')
+      .in('id', userIds);
+
+    const userMap = (usersData || []).reduce((acc: any, u) => { acc[u.id] = u; return acc; }, {});
+
+    return purchases.map((p) => {
+      const student = userMap[p.user_id] || { full_name: 'Unknown User', email: 'Protected', avatar_url: null };
+      
+      // Deterministic mock stats based on user id since we don't have grading/progress tables yet
+      const charCode = p.user_id ? p.user_id.charCodeAt(0) + p.user_id.charCodeAt(p.user_id.length - 1) : 50;
+      const progress = (charCode * 7) % 100;
+      const grade = (charCode * 11) % 40 + 60; // Grades between 60 and 100
+      const streak = (charCode * 3) % 14;
+      
+      let status = "active";
+      if (grade > 90) status = "top";
+      else if (progress < 30) status = "at-risk";
+
+      return {
+        id: `${p.user_id}-${p.course_id}`,
+        user_id: p.user_id,
+        name: student.full_name || 'Unknown User',
+        email: student.email || 'No email provided',
+        avatar: student.avatar_url,
+        course: courseMap[p.course_id] || 'Unknown Course',
+        progress: progress,
+        grade: grade,
+        lastActive: new Date(p.created_at).toLocaleDateString(),
+        status: status,
+        streak: streak
+      };
+    });
+  },
+
 
   async getAllPublishedCourses() {
     const { data, error } = await supabase

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Bell, Search, Menu, BookOpen, ClipboardList, Calendar, LayoutDashboard, Loader2 } from "lucide-react";
 import { useUserProfile } from "../../context/UserProfileContext";
 import { supabase } from "../../../lib/supabase";
+import { useNavigate } from "react-router";
 
 interface Notification {
   id: string;
@@ -9,6 +10,7 @@ interface Notification {
   type: string;
   read: boolean;
   created_at: string;
+  link?: string;
 }
 
 interface HeaderProps {
@@ -22,6 +24,7 @@ export function Header({ onMenuClick, title }: HeaderProps) {
   const [loadingNotifs, setLoadingNotifs] = useState(false);
   const [selectedNotif, setSelectedNotif] = useState<Notification | null>(null);
   const { profile } = useUserProfile();
+  const navigate = useNavigate();
 
   const unreadCount = notifList.filter((n) => !n.read).length;
 
@@ -63,6 +66,19 @@ export function Header({ onMenuClick, title }: HeaderProps) {
       setNotifList((prev) => prev.map((n) => n.id === notif.id ? { ...n, read: true } : n));
       await supabase.from("notifications").update({ read: true }).eq("id", notif.id);
     }
+    
+    if (notif.link) {
+      setShowNotifications(false);
+      navigate(notif.link);
+      return;
+    }
+
+    if (notif.type === 'message') {
+      setShowNotifications(false);
+      navigate(profile?.role === 'tutor' ? '/app/tutor/messages' : '/app/messages');
+      return;
+    }
+
     setSelectedNotif(notif);
     setShowNotifications(false);
   };

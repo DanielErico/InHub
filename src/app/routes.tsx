@@ -19,6 +19,9 @@ import TutorSchedulePage from "./components/tutor/TutorSchedulePage";
 import TutorSettingsPage from "./components/tutor/TutorSettingsPage";
 import TutorAIToolsPage from "./components/tutor/TutorAIToolsPage";
 import TutorCourseDetailsPage from "./components/tutor/TutorCourseDetailsPage";
+import TutorAssignmentsPage from "./components/tutor/TutorAssignmentsPage";
+import TutorAssignmentDetailPage from "./components/tutor/TutorAssignmentDetailPage";
+import MessagesPage from "./components/messages/MessagesPage";
 
 import { AdminLayout } from "./components/admin/AdminLayout";
 import { DashboardPage as AdminDashboardPage } from "./components/admin/pages/DashboardPage";
@@ -163,6 +166,10 @@ export const router = createBrowserRouter([
         Component: AssignmentsPage,
       },
       {
+        path: "messages",
+        Component: MessagesPage,
+      },
+      {
         path: "schedule",
         Component: SchedulePage,
       },
@@ -208,6 +215,18 @@ export const router = createBrowserRouter([
       {
         path: "ai-tools",
         Component: TutorAIToolsPage,
+      },
+      {
+        path: "assignments",
+        Component: TutorAssignmentsPage,
+      },
+      {
+        path: "assignments/:quizId",
+        Component: TutorAssignmentDetailPage,
+      },
+      {
+        path: "messages",
+        Component: MessagesPage,
       },
     ],
   },

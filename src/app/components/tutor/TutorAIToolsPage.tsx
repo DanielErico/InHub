@@ -26,6 +26,8 @@ import { chatCompletion, streamCompletion, MODELS, PROMPTS, ChatMessage } from "
 import { cbtService, SavedCurriculum } from "../../../services/cbtService";
 import { courseService } from "../../../services/courseService";
 import { extractPdfText, extractVideoFrames } from "../../utils/mediaExtractor";
+import PublishQuizModal from "./PublishQuizModal";
+import ManualQuizBuilderModal from "./ManualQuizBuilderModal";
 
 // Markdown renderer with nice styling
 function MarkdownContent({ content }: { content: string }) {
@@ -130,6 +132,12 @@ export default function TutorAIToolsPage() {
   const [savedCurriculums, setSavedCurriculums] = useState<SavedCurriculum[]>([]);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [selectedCurriculum, setSelectedCurriculum] = useState<SavedCurriculum | null>(null);
+  // Publish modal
+  const [publishData, setPublishData] = useState<{ questions: any[]; title: string } | null>(null);
+  const [showManualBuilder, setShowManualBuilder] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   // Curriculum form
   const [currTopic, setCurrTopic] = useState("");
@@ -223,9 +231,12 @@ export default function TutorAIToolsPage() {
          
          setExtractionStatus(`Watching ${lessons.length} video(s)...`);
          for (const lesson of lessons) {
-             if (lesson.video_url) {
-                 const frames = await extractVideoFrames(lesson.video_url, 4);
-                 base64Frames.push(...frames);
+             if (lesson.video_url && base64Frames.length === 0) {
+                 // API only supports 1 image per request, so we only extract 1 frame from the first video
+                 const frames = await extractVideoFrames(lesson.video_url, 1);
+                 if (frames.length > 0) {
+                     base64Frames.push(frames[0]);
+                 }
              }
          }
          setExtractionStatus("");
@@ -239,7 +250,7 @@ export default function TutorAIToolsPage() {
            role: "user",
            content: [
              { type: "text", text: promptText },
-             ...base64Frames.map(frame => ({ type: "image_url", image_url: { url: frame } }))
+             { type: "image_url", image_url: { url: base64Frames[0] } }
            ]
          });
       } else {
@@ -279,8 +290,8 @@ export default function TutorAIToolsPage() {
     if (!output) return;
     try {
       setSavingAction(true);
-      await cbtService.saveCurriculum(currTopic, output);
-      alert("Curriculum saved successfully to your library!");
+      await cbtService.saveCurriculum(currTopic || quizTopic || "Untitled", output);
+      showToast("Saved to your Library!");
     } catch (err: any) {
       alert("Failed to save curriculum: " + err.message);
     } finally {
@@ -288,17 +299,13 @@ export default function TutorAIToolsPage() {
     }
   };
 
-  const handlePublishQuiz = async () => {
+  const handlePublishQuiz = () => {
     if (!output) return;
     try {
-      setSavingAction(true);
       const questionsData = JSON.parse(output);
-      await cbtService.publishQuiz(quizTopic, questionsData);
-      alert("Quiz successfully published as an assignment!");
-    } catch (err: any) {
-      alert("Failed to publish quiz. Ensure the AI finished generating correctly: " + err.message);
-    } finally {
-      setSavingAction(false);
+      setPublishData({ questions: questionsData, title: quizTopic || "Quiz Assignment" });
+    } catch {
+      alert("Failed to parse questions. Make sure the AI finished generating correctly.");
     }
   };
 
@@ -360,7 +367,7 @@ export default function TutorAIToolsPage() {
 
   const isFormValid = () => {
     if (activeTool === "curriculum") return currTopic.trim().length > 0;
-    if (activeTool === "quiz") return quizTopic.trim().length > 0;
+    if (activeTool === "quiz") return quizMode === "custom" ? quizTopic.trim().length > 0 : selectedCourseId.length > 0;
     if (activeTool === "insights") return true;
     return false;
   };
@@ -379,13 +386,22 @@ export default function TutorAIToolsPage() {
           <p className="text-muted-foreground mt-1 ml-[52px]">Generate curriculum, quizzes, and student insights instantly with advanced AI tutor tools.</p>
         </div>
         
-        <button 
-          onClick={() => setShowLibrary(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-card hover:bg-muted/50 border border-border rounded-xl text-sm font-semibold text-foreground transition-all shadow-sm"
-        >
-          <Library className="w-4 h-4 text-blue-600" />
-          Saved Library
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowManualBuilder(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-700 text-white rounded-xl text-sm font-semibold hover:from-purple-700 hover:to-indigo-800 transition-all shadow-sm"
+          >
+            <BookOpen className="w-4 h-4" />
+            Build Manually
+          </button>
+          <button 
+            onClick={() => setShowLibrary(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-card hover:bg-muted/50 border border-border rounded-xl text-sm font-semibold text-foreground transition-all shadow-sm"
+          >
+            <Library className="w-4 h-4 text-blue-600" />
+            Saved Library
+          </button>
+        </div>
       </div>
 
       {/* Tool Selector Cards */}
@@ -846,6 +862,43 @@ export default function TutorAIToolsPage() {
             </div>
           </div>
         </div>
+      )}
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white text-sm px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-4">
+          <CheckCircle2 className="w-4 h-4" /> {toast}
+        </div>
+      )}
+
+      {/* Manual Builder Modal */}
+      {showManualBuilder && (
+        <ManualQuizBuilderModal
+          onClose={() => setShowManualBuilder(false)}
+          onPublish={(questions, title) => {
+            setShowManualBuilder(false);
+            setPublishData({ questions, title });
+          }}
+          onSaveToLibrary={async (questions, title) => {
+            try {
+              await cbtService.saveCurriculum(title, JSON.stringify(questions, null, 2));
+              setShowManualBuilder(false);
+              showToast("Draft saved to library!");
+            } catch (err: any) { alert("Failed: " + err.message); }
+          }}
+        />
+      )}
+
+      {/* Publish Modal */}
+      {publishData && (
+        <PublishQuizModal
+          title={publishData.title}
+          questions={publishData.questions}
+          onClose={() => setPublishData(null)}
+          onPublished={() => {
+            setPublishData(null);
+            showToast("Assignment published successfully!");
+          }}
+        />
       )}
     </div>
   );
