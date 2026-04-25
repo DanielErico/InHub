@@ -29,13 +29,13 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { to: "/app/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/app/courses", icon: BookOpen, label: "Browse Courses" },
-  { to: "/app/my-courses", icon: Library, label: "My Courses" },
-  { to: "/app/assignments", icon: ClipboardList, label: "Assignments" },
-  { to: "/app/messages", icon: MessageSquare, label: "Messages" },
-  { to: "/app/schedule", icon: Calendar, label: "Schedule" },
-  { to: "/app/settings", icon: Settings, label: "Settings" },
+  { to: "/app/dashboard", icon: LayoutDashboard, label: "Dashboard", id: "nav-dashboard" },
+  { to: "/app/courses", icon: BookOpen, label: "Browse Courses", id: "nav-courses" },
+  { to: "/app/my-courses", icon: Library, label: "My Courses", id: "nav-my-courses" },
+  { to: "/app/assignments", icon: ClipboardList, label: "Assignments", id: "nav-assignments" },
+  { to: "/app/messages", icon: MessageSquare, label: "Messages", id: "nav-messages" },
+  { to: "/app/schedule", icon: Calendar, label: "Schedule", id: "nav-schedule" },
+  { to: "/app/settings", icon: Settings, label: "Settings", id: "nav-settings" },
 ];
 
 export function Sidebar({ onClose }: SidebarProps) {
@@ -81,10 +81,11 @@ export function Sidebar({ onClose }: SidebarProps) {
       {/* Nav Items */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         <p className="text-muted-foreground/80 text-xs font-medium uppercase tracking-wider px-3 mb-3">Main Menu</p>
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {navItems.map(({ to, icon: Icon, label, id }) => (
           <NavLink
             key={to}
             to={to}
+            id={id}
             onClick={to === "/app/assignments" ? handleAssignmentClick : onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group ${

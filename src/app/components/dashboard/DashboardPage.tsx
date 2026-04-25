@@ -141,6 +141,7 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      
       {/* Welcome Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -237,7 +238,7 @@ export default function DashboardPage() {
           </div>
 
           {/* My Courses */}
-          <div>
+          <div id="student-courses">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-foreground text-lg">My Courses</h2>
               <button
@@ -310,7 +311,7 @@ export default function DashboardPage() {
         {/* Right Column */}
         <div className="space-y-5">
           {/* Next Session */}
-          <div className="bg-card rounded-2xl p-5 shadow-sm border border-border">
+          <div id="student-schedule" className="bg-card rounded-2xl p-5 shadow-sm border border-border">
             <div className="flex items-center gap-2 mb-4">
               <CalendarDays className="w-4 h-4 text-blue-700 dark:text-blue-400" />
               <h3 className="text-foreground text-sm font-semibold">Next Session</h3>
@@ -381,7 +382,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Upcoming Deadlines */}
-          <div className="bg-card rounded-2xl p-5 shadow-sm border border-border">
+          <div id="student-assignments" className="bg-card rounded-2xl p-5 shadow-sm border border-border">
             <h3 className="text-foreground text-sm font-semibold mb-4">Upcoming Deadlines</h3>
             {pendingAssignments.length === 0 ? (
               <p className="text-muted-foreground text-xs text-center py-2">No pending assignments 🎉</p>

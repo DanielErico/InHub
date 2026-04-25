@@ -28,14 +28,14 @@ interface TutorSidebarProps {
 }
 
 const navItems = [
-  { to: "/app/tutor/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/app/tutor/content", icon: FolderUp, label: "Manage Courses" },
-  { to: "/app/tutor/students", icon: Users, label: "My Students" },
-  { to: "/app/tutor/assignments", icon: ClipboardList, label: "Assignments" },
-  { to: "/app/tutor/messages", icon: MessageSquare, label: "Messages" },
-  { to: "/app/tutor/schedule", icon: Calendar, label: "Schedule" },
-  { to: "/app/tutor/ai-tools", icon: Sparkles, label: "AI Tools" },
-  { to: "/app/tutor/settings", icon: Settings, label: "Settings" },
+  { to: "/app/tutor/dashboard", icon: LayoutDashboard, label: "Dashboard", id: "nav-dashboard" },
+  { to: "/app/tutor/content", icon: FolderUp, label: "Manage Courses", id: "nav-courses" },
+  { to: "/app/tutor/students", icon: Users, label: "My Students", id: "nav-students" },
+  { to: "/app/tutor/assignments", icon: ClipboardList, label: "Assignments", id: "nav-assignments" },
+  { to: "/app/tutor/messages", icon: MessageSquare, label: "Messages", id: "nav-messages" },
+  { to: "/app/tutor/schedule", icon: Calendar, label: "Schedule", id: "nav-schedules" },
+  { to: "/app/tutor/ai-tools", icon: Sparkles, label: "AI Tools", id: "nav-ai-tools" },
+  { to: "/app/tutor/settings", icon: Settings, label: "Settings", id: "nav-settings" },
 ];
 
 export function TutorSidebar({ onClose }: TutorSidebarProps) {
@@ -74,10 +74,11 @@ export function TutorSidebar({ onClose }: TutorSidebarProps) {
       {/* Nav Items */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         <p className="text-muted-foreground/80 text-xs font-medium uppercase tracking-wider px-3 mb-3">Menu</p>
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {navItems.map(({ to, icon: Icon, label, id }) => (
           <NavLink
             key={to}
             to={to}
+            id={id}
             onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-200 group ${

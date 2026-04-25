@@ -50,6 +50,7 @@ export default function TutorDashboardPage() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
+      
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -62,7 +63,7 @@ export default function TutorDashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div id="tutor-stats" className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-card p-6 rounded-2xl border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">

@@ -683,22 +683,9 @@ export const courseService = {
   // === Assignments === //
 
   async getAssignments(studentId: string): Promise<Assignment[]> {
-    try {
-      const { data, error } = await supabase
-        .from('assignments')
-        .select('*, courses(title), assignment_submissions!left(id, status, student_id)')
-        .order('due_date', { ascending: true });
-      if (error) return [];
-      // Filter submissions to only this student
-      return ((data as any[]) || []).map((a) => ({
-        ...a,
-        assignment_submissions: (a.assignment_submissions || []).filter(
-          (s: any) => s.student_id === studentId
-        ),
-      }));
-    } catch {
-      return [];
-    }
+    // TODO: Migrate from 'assignments' table to 'quizzes' and 'quiz_scores'
+    // Currently returns empty array to prevent 404 errors in console
+    return [];
   },
 
   async submitAssignment(assignmentId: string, studentId: string, file: File | null): Promise<void> {
