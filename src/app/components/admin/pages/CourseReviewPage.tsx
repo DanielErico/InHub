@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { supabase } from '../../../../lib/supabase';
 import { courseService, Course, Lesson, Resource } from '../../../../services/courseService';
+import toast from 'react-hot-toast';
 import {
   Loader2, Video, FileText, CheckCircle, XCircle, AlertTriangle,
   ChevronLeft, User, Mail, Calendar, BookOpen, Tag, DollarSign,
@@ -93,10 +94,12 @@ export function CourseReviewPage() {
     try {
       await courseService.updateCourseStatus(course.id, action);
 
+      const actionLabel = action === 'published' ? 'approved' : action === 'rejected' ? 'rejected' : 'sent back for changes';
+
       if (feedback.trim()) {
         await supabase.from('notifications').insert({
           user_id: course.tutor_id,
-          message: `Your course "${course.title}" was ${action === 'needs_changes' ? 'sent back for changes' : 'rejected'}. Admin Feedback: ${feedback}`
+          message: `Your course "${course.title}" was ${actionLabel}. Admin Feedback: ${feedback}`
         });
       } else if (action === 'published') {
         await supabase.from('notifications').insert({
@@ -105,9 +108,11 @@ export function CourseReviewPage() {
         });
       }
 
+      toast.success(`Course successfully ${actionLabel}!`);
       navigate('/app/admin/courses');
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      console.error('Course action failed:', err);
+      toast.error(`Failed: ${err.message || 'Permission denied. Check RLS policies.'}`);
     } finally {
       setSubmitting(false);
     }

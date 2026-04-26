@@ -531,7 +531,9 @@ export const courseService = {
     const { error } = await supabase
       .from('courses')
       .update({ status })
-      .eq('id', courseId);
+      .eq('id', courseId)
+      .select()
+      .single();
     if (error) throw error;
   },
 
