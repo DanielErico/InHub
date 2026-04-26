@@ -22,11 +22,32 @@ export default function AuthCallbackPage() {
       }
 
       // Fetch the role from the users table
-      const { data: profile } = await supabase
+      let { data: profile } = await supabase
         .from("users")
         .select("role")
         .eq("id", session.user.id)
         .maybeSingle();
+
+      const intendedRole = localStorage.getItem("intendedRole");
+      const currentRole = profile?.role?.toLowerCase();
+
+      // Apply the intended role if they just selected it on the Auth page.
+      // CRITICAL: Never overwrite an 'admin' role!
+      if (intendedRole && currentRole !== 'admin' && currentRole !== intendedRole) {
+        const { error: upsertError } = await supabase.from("users").upsert({
+          id: session.user.id,
+          role: intendedRole,
+          full_name: profile?.full_name || session.user.user_metadata?.full_name,
+          avatar_url: profile?.avatar_url || session.user.user_metadata?.avatar_url
+        });
+        
+        if (!upsertError) {
+          profile = { ...profile, role: intendedRole };
+        }
+      }
+
+      // Cleanup
+      localStorage.removeItem("intendedRole");
 
       const role = profile?.role?.toLowerCase();
 

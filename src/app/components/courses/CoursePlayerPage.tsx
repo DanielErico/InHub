@@ -126,6 +126,7 @@ export default function CoursePlayerPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"notes" | "chapters" | "resources">("notes");
+  const [completedLessons, setCompletedLessons] = useState<string[]>([]);
   const [sidebarTab, setSidebarTab] = useState<"chat" | "lessons">("lessons");
 
   useEffect(() => {
@@ -154,6 +155,13 @@ export default function CoursePlayerPage() {
           setActiveLesson(lessonsData[0]);
         } else {
           setActiveTab("resources");
+        }
+
+        // Get completions
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          const completions = await courseService.getStudentCourseCompletions(currentUser.id, id);
+          setCompletedLessons(completions);
         }
       } catch (e) {
         console.error(e);
@@ -370,6 +378,14 @@ export default function CoursePlayerPage() {
                 className="w-full h-full object-cover" 
                 controls 
                 autoPlay 
+                onEnded={async () => {
+                  if (profile?.id && activeLesson) {
+                    await courseService.markLessonComplete(profile.id, activeLesson.id, course.id);
+                    setCompletedLessons(prev => [...new Set([...prev, activeLesson.id])]);
+                    // toast is imported as CheckCircle2 but maybe user wants a real toast. 
+                    // I'll check if toast is imported.
+                  }
+                }}
               />
             ) : (
               <ImageWithFallback
@@ -717,13 +733,17 @@ export default function CoursePlayerPage() {
               <p className="text-muted-foreground/80 text-xs">
                 {lessons.length} lessons available
               </p>
-              <div className="mt-3 bg-muted rounded-full h-1.5">
-                <div className="bg-blue-700 h-1.5 rounded-full" style={{ width: `0%` }} />
+              <div className="mt-3 bg-muted rounded-full h-1.5 overflow-hidden">
+                <div 
+                  className="bg-blue-700 h-1.5 rounded-full transition-all duration-500" 
+                  style={{ width: `${(completedLessons.length / lessons.length) * 100}%` }} 
+                />
               </div>
             </div>
             <div className="flex-1 overflow-y-auto">
               {lessons.map((lesson, i) => {
                 const isActive = activeLesson && lesson.id === activeLesson.id;
+                const isCompleted = completedLessons.includes(lesson.id);
                 return (
                   <div
                     key={lesson.id}
@@ -733,7 +753,7 @@ export default function CoursePlayerPage() {
                     }`}
                   >
                     <div className="flex-shrink-0 mt-0.5">
-                      {lesson.completed ? (
+                      {isCompleted ? (
                         <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
                           <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                         </div>
@@ -748,7 +768,7 @@ export default function CoursePlayerPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs leading-snug mb-1 ${isActive ? "text-blue-900 font-semibold" : lesson.completed ? "text-muted-foreground" : "text-foreground/80"}`}>
+                      <p className={`text-xs leading-snug mb-1 ${isActive ? "text-blue-900 font-semibold" : isCompleted ? "text-muted-foreground" : "text-foreground/80"}`}>
                         {lesson.title}
                       </p>
                       <div className="flex items-center gap-2">

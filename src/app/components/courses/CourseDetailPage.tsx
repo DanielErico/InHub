@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router";
 import {
   ChevronLeft, Star, Clock, Globe, BarChart2, CheckCircle2,
   BookOpen, FileText, Award, ClipboardList, Play, Lock,
-  ChevronDown, ChevronUp, Video, User, Calendar, Loader2, Users
+  ChevronDown, ChevronUp, Video, User, Calendar, Loader2, Users,
+  ShieldCheck, Maximize
 } from "lucide-react";
 import { courseService, Course } from "../../../services/courseService";
 import { supabase } from "../../../lib/supabase";
@@ -390,17 +391,96 @@ export default function CourseDetailPage() {
             </section>
           )}
 
-          {/* Certificate */}
-          {course.has_certificate && (
-            <section className="bg-gradient-to-br from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-6">
-              <h2 className="text-lg font-bold text-amber-900 mb-2 flex items-center gap-2">
-                <Award className="w-5 h-5 text-amber-500" /> Certificate of Completion
+          {/* Certification Section */}
+          <section className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm">
+            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 px-6 py-4">
+              <h2 className="text-white font-bold flex items-center gap-2">
+                <Award className="w-5 h-5" /> Professional Certification
               </h2>
-              <p className="text-sm text-amber-800 leading-relaxed">
-                {course.certificate_requirements || "Complete all course modules to earn your certificate."}
-              </p>
-            </section>
-          )}
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="flex flex-col md:flex-row gap-6">
+                {/* Intern Connect Certificate */}
+                <div className="flex-1 p-5 rounded-2xl bg-blue-50 border border-blue-100 flex flex-col gap-3">
+                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+                    <ShieldCheck className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-blue-900 text-sm">Intern Connect Verified</h4>
+                    <p className="text-xs text-blue-700 leading-relaxed mt-1">
+                      You will receive an official certificate from Intern Connect upon successful completion of all course modules.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tutor Certificate */}
+                {course.has_tutor_certificate && (
+                  <div className="flex-1 p-5 rounded-2xl bg-purple-50 border border-purple-100 flex flex-col gap-3">
+                    <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center">
+                      <Award className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-purple-900 text-sm">Instructor Certification</h4>
+                      <p className="text-xs text-purple-700 leading-relaxed mt-1">
+                        In addition to the platform certificate, the instructor will award their personal industry-recognized certificate.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Certificate Preview (If tutor has one) */}
+              {course.has_tutor_certificate && course.tutor_certificate_sample_url && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-foreground">Certificate Preview</h3>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Sample</span>
+                  </div>
+                  <div className="relative group aspect-video md:aspect-[16/7] bg-muted rounded-2xl border border-border overflow-hidden shadow-inner">
+                    {course.tutor_certificate_sample_url.toLowerCase().endsWith('.pdf') ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-slate-50">
+                        <FileText className="w-12 h-12 text-red-500 opacity-40" />
+                        <p className="text-sm font-medium text-muted-foreground">PDF Certificate Preview</p>
+                        <a 
+                          href={course.tutor_certificate_sample_url} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="mt-2 bg-white border border-border px-4 py-2 rounded-xl text-xs font-bold hover:bg-muted transition-colors flex items-center gap-2 shadow-sm"
+                        >
+                          <Play className="w-3 h-3 fill-blue-600 text-blue-600" /> View Sample PDF
+                        </a>
+                      </div>
+                    ) : (
+                      <>
+                        <img 
+                          src={course.tutor_certificate_sample_url} 
+                          alt="Certificate Sample" 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                        />
+                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <a 
+                            href={course.tutor_certificate_sample_url} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="bg-white/90 backdrop-blur-sm text-foreground px-5 py-2.5 rounded-2xl text-sm font-bold shadow-2xl flex items-center gap-2 hover:bg-white transition-all scale-90 group-hover:scale-100"
+                          >
+                            <Maximize className="w-4 h-4" /> Enlarge Preview
+                          </a>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {course.certificate_requirements && (
+                    <div className="flex items-start gap-2.5 text-xs text-muted-foreground bg-muted/30 p-3 rounded-xl border border-border/50">
+                      <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                      <p><strong>Requirements:</strong> {course.certificate_requirements}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
 
           {/* Instructor */}
           {tutor && (

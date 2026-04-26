@@ -29,6 +29,9 @@ export function CourseInfoForm({ course, onSaved }: Props) {
   const [previewUrl, setPreviewUrl] = useState(course.preview_video_url || "");
   const [thumbnailUrl, setThumbnailUrl] = useState(course.thumbnail_url || "");
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [hasTutorCert, setHasTutorCert] = useState(course.has_tutor_certificate ?? false);
+  const [certSampleUrl, setCertSampleUrl] = useState(course.tutor_certificate_sample_url || "");
+  const [certFile, setCertFile] = useState<File | null>(null);
 
   const addOutcome = () => setOutcomes(p => [...p, ""]);
   const removeOutcome = (i: number) => setOutcomes(p => p.filter((_, j) => j !== i));
@@ -55,6 +58,11 @@ export function CourseInfoForm({ course, onSaved }: Props) {
         finalThumbnailUrl = await courseService.uploadCourseThumbnail(course.id, thumbnailFile);
       }
 
+      let finalCertSampleUrl = certSampleUrl;
+      if (certFile) {
+        finalCertSampleUrl = await courseService.uploadCertificateSample(course.id, certFile);
+      }
+
       await courseService.updateCourseDetails(course.id, {
         level: level as any,
         language,
@@ -70,6 +78,8 @@ export function CourseInfoForm({ course, onSaved }: Props) {
         certificate_requirements: certReqs,
         preview_video_url: previewUrl,
         thumbnail_url: finalThumbnailUrl,
+        has_tutor_certificate: hasTutorCert,
+        tutor_certificate_sample_url: finalCertSampleUrl,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -236,18 +246,48 @@ export function CourseInfoForm({ course, onSaved }: Props) {
 
         <div className={sectionCls}>
           <h3 className="font-bold text-foreground text-base">🎓 Certification</h3>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <div onClick={() => setHasCertificate(p => !p)} className={`w-11 h-6 rounded-full transition-colors relative ${hasCertificate ? "bg-blue-600" : "bg-muted"}`}>
-              <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${hasCertificate ? "translate-x-5" : ""}`}/>
+          <div className="space-y-4">
+            <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+              <p className="text-xs text-blue-700 font-medium">Note: Intern Connect will always award a certificate upon completion. You can also award your own custom certificate.</p>
             </div>
-            <span className="text-sm text-foreground">Awards certificate</span>
-          </label>
-          {hasCertificate && (
-            <div>
-              <label className={labelCls}>Certificate requirements</label>
-              <textarea className={inputCls + " resize-none"} rows={3} value={certReqs} onChange={e => setCertReqs(e.target.value)} placeholder="e.g. Complete all modules and submit final project..." />
-            </div>
-          )}
+            
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div onClick={() => setHasTutorCert(p => !p)} className={`w-11 h-6 rounded-full transition-colors relative ${hasTutorCert ? "bg-blue-600" : "bg-muted"}`}>
+                <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${hasTutorCert ? "translate-x-5" : ""}`}/>
+              </div>
+              <span className="text-sm text-foreground">Award Tutor Certificate</span>
+            </label>
+
+            {hasTutorCert && (
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls}>Sample Certificate</label>
+                  <div className="flex items-center gap-4">
+                    <label className="flex-1 cursor-pointer">
+                      <div className="border-2 border-dashed border-border rounded-xl p-4 flex flex-col items-center justify-center gap-2 hover:border-blue-400 transition-colors">
+                        <Upload className="w-6 h-6 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Click to upload sample (PNG/JPG/PDF)</span>
+                      </div>
+                      <input type="file" className="hidden" accept="image/*,.pdf" onChange={e => setCertFile(e.target.files?.[0] || null)} />
+                    </label>
+                    {(certFile || certSampleUrl) && (
+                      <div className="w-20 h-14 bg-muted rounded-lg overflow-hidden border border-border flex items-center justify-center">
+                        {certFile ? (
+                          <span className="text-[10px] text-center px-1 font-medium">{certFile.name.slice(0, 15)}...</span>
+                        ) : (
+                          <img src={certSampleUrl} alt="Sample" className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Requirements to earn it</label>
+                  <textarea className={inputCls + " resize-none"} rows={2} value={certReqs} onChange={e => setCertReqs(e.target.value)} placeholder="e.g. Complete all modules and submit final project..." />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

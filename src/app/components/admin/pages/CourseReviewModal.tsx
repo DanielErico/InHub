@@ -138,6 +138,26 @@ export function CourseReviewModal({ courseId, onClose, onSuccess }: CourseReview
                     </div>
                   </div>
                 )}
+
+                {/* Certificate Sample */}
+                {course.has_tutor_certificate && course.tutor_certificate_sample_url && (
+                  <div className="mt-6 p-4 border-2 border-blue-100 rounded-xl bg-blue-50/30">
+                    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-blue-600" /> Tutor Certificate Sample
+                    </h3>
+                    <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden border border-gray-200 relative group">
+                      {course.tutor_certificate_sample_url.toLowerCase().endsWith('.pdf') ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                          <FileText className="w-8 h-8 text-red-500" />
+                          <span className="text-xs font-medium text-gray-500">PDF Certificate</span>
+                          <a href={course.tutor_certificate_sample_url} target="_blank" rel="noreferrer" className="text-xs text-blue-700 font-bold hover:underline">Click to view PDF</a>
+                        </div>
+                      ) : (
+                        <img src={course.tutor_certificate_sample_url} alt="Sample" className="w-full h-full object-contain" />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

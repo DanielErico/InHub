@@ -233,6 +233,7 @@ export default function AuthPage() {
   const handleGoogleLogin = async () => {
     setError(null);
     try {
+      localStorage.setItem("intendedRole", role);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {

@@ -3,6 +3,8 @@ import { Outlet, useLocation, NavLink } from "react-router";
 import { LayoutDashboard, BookOpen, ClipboardList, Calendar, Settings, X } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
+import { useUserProfile } from "../../context/UserProfileContext";
+import OnboardingFlow from "../onboarding/OnboardingFlow";
 
 const pageTitles: Record<string, string> = {
   "/app/dashboard": "Dashboard",
@@ -23,6 +25,7 @@ const mobileNavItems = [
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { profile, loading } = useUserProfile();
 
   const pageTitle =
     pageTitles[location.pathname] ||
@@ -32,6 +35,13 @@ export default function Layout() {
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
+
+  if (loading) return null; // or a loader
+
+  // Intercept if onboarding is not completed
+  if (profile && !profile.has_completed_onboarding) {
+    return <OnboardingFlow />;
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden transition-colors duration-200">

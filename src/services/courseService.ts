@@ -30,6 +30,8 @@ export interface Course {
   has_certificate?: boolean;
   certificate_requirements?: string;
   preview_video_url?: string;
+  has_tutor_certificate?: boolean;
+  tutor_certificate_sample_url?: string;
 }
 
 export interface Lesson {
@@ -526,6 +528,28 @@ export const courseService = {
 
     return thumbnailUrl;
   },
+  
+  async uploadCertificateSample(courseId: string, file: File): Promise<string> {
+    const fileName = `${Date.now()}-cert-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    const { error: uploadError } = await supabase.storage
+      .from('course-content')
+      .upload(`certificates/${fileName}`, file, { cacheControl: '3600', upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const { data: publicUrlData } = supabase.storage
+      .from('course-content')
+      .getPublicUrl(`certificates/${fileName}`);
+
+    const certUrl = publicUrlData.publicUrl;
+
+    await supabase
+      .from('courses')
+      .update({ tutor_certificate_sample_url: certUrl })
+      .eq('id', courseId);
+
+    return certUrl;
+  },
 
   async updateCourseStatus(courseId: string, status: Course['status']) {
     const { error } = await supabase
@@ -682,6 +706,53 @@ export const courseService = {
     }
   },
 
+  async getOverallProgress(studentId: string) {
+    try {
+      // 1. Get student's purchased course IDs
+      const { data: purchases } = await supabase
+        .from('purchases')
+        .select('course_id')
+        .eq('user_id', studentId)
+        .eq('status', 'success');
+
+      if (!purchases || purchases.length === 0) return 0;
+      const courseIds = purchases.map(p => p.course_id);
+
+      // 2. Get total lessons and quizzes for these courses
+      const { data: lessons } = await supabase.from('lessons').select('id, course_id').in('course_id', courseIds);
+      const { data: quizzes } = await supabase.from('quizzes').select('id, course_id').in('course_id', courseIds).eq('status', 'published');
+
+      // 3. Get completions and scores
+      const { data: completions } = await supabase.from('lesson_completions').select('lesson_id, course_id').eq('student_id', studentId);
+      const { data: scores } = await supabase.from('quiz_scores').select('quiz_id, passed').eq('student_id', studentId).eq('passed', true);
+
+      if (!lessons && !quizzes) return 0;
+
+      // Group totals and completions by course
+      let totalPoints = 0;
+      let completedPoints = 0;
+
+      courseIds.forEach(cId => {
+        const courseLessons = lessons?.filter(l => l.course_id === cId) || [];
+        const courseQuizzes = quizzes?.filter(q => q.course_id === cId) || [];
+        const total = courseLessons.length + courseQuizzes.length;
+
+        if (total > 0) {
+          const doneLessons = completions?.filter(c => c.course_id === cId).length || 0;
+          const doneQuizzes = scores?.filter(s => quizzes?.find(q => q.id === s.quiz_id && q.course_id === cId)).length || 0;
+          
+          totalPoints += total;
+          completedPoints += (doneLessons + doneQuizzes);
+        }
+      });
+
+      return totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100) : 0;
+    } catch (err) {
+      console.error("Progress error:", err);
+      return 0;
+    }
+  },
+
   // === Assignments === //
 
   async getAssignments(studentId: string): Promise<Assignment[]> {
@@ -717,15 +788,45 @@ export const courseService = {
 
   // === Schedule === //
 
-  async getScheduleSessions(): Promise<ScheduleSession[]> {
+  async getScheduleSessions(userId?: string): Promise<ScheduleSession[]> {
     try {
+      // Use provided ID or get current user ID
+      let effectiveUserId = userId;
+      if (!effectiveUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        effectiveUserId = user?.id;
+      }
+
+      if (!effectiveUserId) return [];
+
+      // Find courses student is enrolled in
+      const { data: purchases } = await supabase
+        .from('purchases')
+        .select('course_id')
+        .eq('user_id', effectiveUserId)
+        .eq('status', 'success');
+
+      if (!purchases || purchases.length === 0) return [];
+
+      const courseIds = purchases.map(p => p.course_id);
+
       const { data, error } = await supabase
         .from('schedule_sessions')
-        .select('*, courses(title), users(full_name)')
+        .select(`
+          *,
+          courses ( title ),
+          users ( full_name )
+        `)
+        .in('course_id', courseIds)
         .order('scheduled_at', { ascending: true });
-      if (error) return [];
+
+      if (error) {
+        console.error("Error fetching schedule sessions:", error);
+        return [];
+      }
       return (data as ScheduleSession[]) || [];
-    } catch {
+    } catch (err) {
+      console.error("Schedule sessions error:", err);
       return [];
     }
   },

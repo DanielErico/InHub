@@ -300,6 +300,43 @@ export function CourseReviewPage() {
             </div>
           </div>
 
+          {/* Certificate Sample Card */}
+          {course.has_tutor_certificate && course.tutor_certificate_sample_url && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden border-l-4 border-l-blue-600">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2 text-sm">
+                  <ShieldCheck className="w-4 h-4 text-blue-600" /> Tutor Certificate
+                </h3>
+                <a 
+                  href={course.tutor_certificate_sample_url} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="text-xs text-blue-700 hover:underline font-semibold"
+                >
+                  View Full
+                </a>
+              </div>
+              <div className="p-5">
+                <div className="aspect-video bg-gray-50 rounded-xl border border-gray-100 overflow-hidden shadow-inner relative group">
+                  {course.tutor_certificate_sample_url.toLowerCase().endsWith('.pdf') ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                      <FileText className="w-8 h-8 text-red-500" />
+                      <span className="text-xs font-medium text-gray-500 text-center px-4">PDF Certificate Sample</span>
+                      <a href={course.tutor_certificate_sample_url} target="_blank" rel="noreferrer" className="mt-2 text-[10px] bg-red-50 text-red-700 px-2 py-1 rounded border border-red-100">Open PDF</a>
+                    </div>
+                  ) : (
+                    <img src={course.tutor_certificate_sample_url} alt="Certificate Sample" className="w-full h-full object-contain" />
+                  )}
+                </div>
+                <div className="mt-4 p-3 bg-blue-50/50 rounded-lg border border-blue-100/50">
+                  <p className="text-[10px] text-blue-800 leading-relaxed italic">
+                    "Tutor awards this certificate upon completion. Admins must verify the sample meets quality standards."
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tutor Card */}
           {tutor && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">

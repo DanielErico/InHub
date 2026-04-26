@@ -98,7 +98,7 @@ export default function DashboardPage() {
   const [purchasedCourses, setPurchasedCourses] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [sessions, setSessions] = useState<ScheduleSession[]>([]);
-  const [quizCount, setQuizCount] = useState(0);
+  const [overallProgress, setOverallProgress] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -109,16 +109,18 @@ export default function DashboardPage() {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const [coursesData, purchasedData, assignmentsData, sessionsData] = await Promise.all([
+      const [coursesData, purchasedData, assignmentsData, sessionsData, progressVal] = await Promise.all([
         courseService.getAllPublishedCourses(),
         courseService.getPurchasedCourses(),
         courseService.getAssignments(profile!.id),
-        courseService.getScheduleSessions(),
+        courseService.getScheduleSessions(profile!.id),
+        courseService.getOverallProgress(profile!.id),
       ]);
       setPublishedCourses(coursesData || []);
       setPurchasedCourses(purchasedData || []);
       setAssignments(assignmentsData || []);
       setSessions(sessionsData || []);
+      setOverallProgress(progressVal);
     } catch (error) {
       console.error("Dashboard error:", error);
     } finally {
@@ -129,7 +131,6 @@ export default function DashboardPage() {
   const firstName = profile?.full_name?.split(" ")[0] || "there";
   const pendingAssignments = getPendingAssignments(assignments);
   const nextSession = sessions.length > 0 ? sessions[0] : null;
-  const overallProgress = 0; // Will be calculated once lesson_completions table is set up
 
   if (loading) {
     return (

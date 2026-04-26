@@ -32,6 +32,7 @@ import { AssignmentsPage as AdminAssignmentsPage } from "./components/admin/page
 import { AIAnalyticsPage as AdminAIAnalyticsPage } from "./components/admin/pages/AIAnalyticsPage";
 import { NotificationsPage as AdminNotificationsPage } from "./components/admin/pages/NotificationsPage";
 import { SettingsPage as AdminSettingsPage } from "./components/admin/pages/SettingsPage";
+import { SurveysPage as AdminSurveysPage } from "./components/admin/pages/SurveysPage";
 
 // Authentication loader - checks if user is authenticated
 async function authLoader() {
@@ -262,6 +263,10 @@ export const router = createBrowserRouter([
       {
         path: "notifications",
         Component: AdminNotificationsPage,
+      },
+      {
+        path: "surveys",
+        Component: AdminSurveysPage,
       },
       {
         path: "settings",

@@ -11,23 +11,27 @@ export interface UserProfile {
   location: string | null;
   website: string | null;
   linkedin: string | null;
+  has_completed_onboarding: boolean;
 }
 
 interface UserProfileContextValue {
   profile: UserProfile | null;
   loading: boolean;
   refetch: () => void;
+  completeOnboarding: () => void;
 }
 
 const UserProfileContext = createContext<UserProfileContextValue>({
   profile: null,
   loading: true,
   refetch: () => {},
+  completeOnboarding: () => {},
 });
 
 export function UserProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [onboardingDone, setOnboardingDone] = useState(false);
 
   const fetchProfile = async () => {
     try {
@@ -38,9 +42,12 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       }
       const { data } = await supabase
         .from("users")
-        .select("id, full_name, role, avatar_url, bio, location, website, linkedin")
+        .select("id, full_name, role, avatar_url, bio, location, website, linkedin, has_completed_onboarding")
         .eq("id", authUser.id)
         .maybeSingle();
+
+      const localDone = localStorage.getItem(`onboarding_${authUser.id}`) === 'true';
+      const completedOnboarding = data?.has_completed_onboarding || localDone || onboardingDone;
 
       setProfile({
         id: authUser.id,
@@ -52,7 +59,10 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         location: data?.location ?? null,
         website: data?.website ?? null,
         linkedin: data?.linkedin ?? null,
+        has_completed_onboarding: completedOnboarding,
       });
+
+      if (completedOnboarding) setOnboardingDone(true);
     } catch (err) {
       console.error("Failed to load user profile", err);
     } finally {
@@ -71,8 +81,16 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const completeOnboarding = () => {
+    if (profile) {
+      localStorage.setItem(`onboarding_${profile.id}`, 'true');
+      setOnboardingDone(true);
+      setProfile({ ...profile, has_completed_onboarding: true });
+    }
+  };
+
   return (
-    <UserProfileContext.Provider value={{ profile, loading, refetch: fetchProfile }}>
+    <UserProfileContext.Provider value={{ profile, loading, refetch: fetchProfile, completeOnboarding }}>
       {children}
     </UserProfileContext.Provider>
   );

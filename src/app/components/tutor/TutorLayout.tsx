@@ -3,6 +3,8 @@ import { Outlet, useLocation, NavLink } from "react-router";
 import { LayoutDashboard, FolderUp, Users, Calendar, Settings, X } from "lucide-react";
 import { TutorSidebar } from "./TutorSidebar";
 import { Header } from "../layout/Header";
+import { useUserProfile } from "../../context/UserProfileContext";
+import OnboardingFlow from "../onboarding/OnboardingFlow";
 
 const pageTitles: Record<string, string> = {
   "/app/tutor/dashboard": "Tutor Dashboard",
@@ -23,6 +25,7 @@ const mobileNavItems = [
 export default function TutorLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { profile, loading } = useUserProfile();
 
   const pageTitle = pageTitles[location.pathname] || "Tutor Portal";
 
@@ -30,6 +33,12 @@ export default function TutorLayout() {
   useEffect(() => {
     setSidebarOpen(false);
   }, [location.pathname]);
+
+  if (loading) return null;
+
+  if (profile && !profile.has_completed_onboarding) {
+    return <OnboardingFlow />;
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden transition-colors duration-200">
