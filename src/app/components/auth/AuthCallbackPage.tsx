@@ -29,7 +29,14 @@ export default function AuthCallbackPage() {
         .maybeSingle();
 
       const intendedRole = localStorage.getItem("intendedRole");
-      const currentRole = profile?.role?.toLowerCase();
+      let currentRole = profile?.role?.toLowerCase();
+      const userEmail = session.user.email?.toLowerCase();
+
+      // Hardcode admin protection for the main admin account to prevent accidental lockouts
+      const isAdminEmail = userEmail === "dinternconnect@gmail.com";
+      if (isAdminEmail) {
+        currentRole = "admin";
+      }
 
       // Apply the intended role if they just selected it on the Auth page.
       // CRITICAL: Never overwrite an 'admin' role!
@@ -43,17 +50,16 @@ export default function AuthCallbackPage() {
         
         if (!upsertError) {
           profile = { ...profile, role: intendedRole };
+          currentRole = intendedRole;
         }
       }
 
       // Cleanup
       localStorage.removeItem("intendedRole");
 
-      const role = profile?.role?.toLowerCase();
-
-      if (role === "admin") {
+      if (currentRole === "admin") {
         navigate("/app/admin", { replace: true });
-      } else if (role === "tutor") {
+      } else if (currentRole === "tutor") {
         navigate("/app/tutor/dashboard", { replace: true });
       } else {
         navigate("/app/dashboard", { replace: true });

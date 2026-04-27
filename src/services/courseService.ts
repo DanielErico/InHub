@@ -788,4 +788,236 @@ export const courseService = {
       return [];
     }
   },
+
+  // === Tutor Finance === //
+
+  async getTutorFinanceData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    // Get all tutor courses
+    const { data: courses } = await supabase
+      .from('courses')
+      .select('id, title, price')
+      .eq('tutor_id', user.id);
+
+    const courseIds = (courses || []).map(c => c.id);
+    const courseMap: Record<string, any> = (courses || []).reduce((acc: any, c) => { acc[c.id] = c; return acc; }, {});
+
+    // Get all successful purchases for those courses
+    let purchases: any[] = [];
+    if (courseIds.length > 0) {
+      const { data: purchaseData } = await supabase
+        .from('purchases')
+        .select('id, user_id, course_id, amount_paid, created_at')
+        .in('course_id', courseIds)
+        .eq('status', 'success')
+        .order('created_at', { ascending: false });
+
+      if (purchaseData && purchaseData.length > 0) {
+        // Fetch student details
+        const userIds = [...new Set(purchaseData.map(p => p.user_id))];
+        const { data: usersData } = await supabase
+          .from('users')
+          .select('id, full_name, email, avatar_url')
+          .in('id', userIds as string[]);
+        const userMap = (usersData || []).reduce((acc: any, u) => { acc[u.id] = u; return acc; }, {});
+
+        purchases = purchaseData.map(p => ({
+          ...p,
+          student: userMap[p.user_id] || { full_name: 'Unknown', email: '' },
+          course: courseMap[p.course_id] || { title: 'Unknown Course', price: 0 },
+          tutor_share: (Number(p.amount_paid) || 0) * 0.65,
+        }));
+      }
+    }
+
+    // Get withdrawal requests
+    const { data: withdrawals } = await supabase
+      .from('tutor_withdrawals')
+      .select('*')
+      .eq('tutor_id', user.id)
+      .order('created_at', { ascending: false });
+
+    // Get bank details from profile
+    const { data: profile } = await supabase
+      .from('users')
+      .select('bank_name, bank_account_number, bank_account_name')
+      .eq('id', user.id)
+      .single();
+
+    const allTimeRevenue = purchases.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
+    const allTimeTutorEarnings = allTimeRevenue * 0.65; // 65% share
+    
+    const totalWithdrawn = (withdrawals || [])
+      .filter(w => w.status === 'approved' || w.status === 'paid')
+      .reduce((sum, w) => sum + Number(w.amount || 0), 0);
+      
+    const pendingWithdrawal = (withdrawals || [])
+      .filter(w => w.status === 'pending')
+      .reduce((sum, w) => sum + Number(w.amount || 0), 0);
+
+    // User requested: "removing the amount withdrawn, everything should recalculate"
+    // We treat the current earnings and revenue as a "wallet balance" rather than an all-time ledger.
+    const totalTutorEarnings = Math.max(0, allTimeTutorEarnings - totalWithdrawn);
+    const totalRevenue = Math.max(0, allTimeRevenue - (totalWithdrawn / 0.65)); // Scale it so the 65% math holds visually
+    
+    // Hold back is 30% of the ALL TIME earnings (since it's released on completion)
+    const heldBack = allTimeTutorEarnings * 0.30; 
+    
+    // Available is 70% of ALL TIME earnings minus what they've already withdrawn
+    const availableForWithdrawal = Math.max(0, (allTimeTutorEarnings * 0.70) - totalWithdrawn);
+
+    return {
+      purchases,
+      withdrawals: withdrawals || [],
+      totalRevenue,
+      totalTutorEarnings,
+      availableForWithdrawal,
+      heldBack,
+      totalWithdrawn,
+      pendingWithdrawal,
+      bankDetails: profile || null,
+    };
+  },
+
+  async submitWithdrawalRequest(payload: {
+    amount: number;
+    bank_name: string;
+    account_number: string;
+    account_name: string;
+  }) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    // Cache bank details on the user profile for future use
+    await supabase.from('users').update({
+      bank_name: payload.bank_name,
+      bank_account_number: payload.account_number,
+      bank_account_name: payload.account_name,
+    }).eq('id', user.id);
+
+    const { data, error } = await supabase
+      .from('tutor_withdrawals')
+      .insert({
+        tutor_id: user.id,
+        amount: payload.amount,
+        bank_name: payload.bank_name,
+        account_number: payload.account_number,
+        account_name: payload.account_name,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // === Admin Finance === //
+
+  async adminGetAllPurchases() {
+    const { data: purchases, error } = await supabase
+      .from('purchases')
+      .select('id, user_id, course_id, amount_paid, created_at, status')
+      .eq('status', 'success')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    if (!purchases || purchases.length === 0) return [];
+
+    // Fetch all related courses and their tutors
+    const courseIds = [...new Set(purchases.map(p => p.course_id))];
+    const studentIds = [...new Set(purchases.map(p => p.user_id))];
+
+    const [{ data: courses }, { data: students }] = await Promise.all([
+      supabase.from('courses').select('id, title, tutor_id, price').in('id', courseIds as string[]),
+      supabase.from('users').select('id, full_name, email').in('id', studentIds as string[]),
+    ]);
+
+    const tutorIds = [...new Set((courses || []).map((c: any) => c.tutor_id))];
+    const { data: tutors } = await supabase
+      .from('users')
+      .select('id, full_name, email')
+      .in('id', tutorIds as string[]);
+
+    const courseMap = (courses || []).reduce((acc: any, c: any) => { acc[c.id] = c; return acc; }, {});
+    const studentMap = (students || []).reduce((acc: any, u: any) => { acc[u.id] = u; return acc; }, {});
+    const tutorMap = (tutors || []).reduce((acc: any, u: any) => { acc[u.id] = u; return acc; }, {});
+
+    return purchases.map(p => {
+      const course = courseMap[p.course_id] || {};
+      const tutor = tutorMap[course.tutor_id] || {};
+      const student = studentMap[p.user_id] || {};
+      return {
+        id: p.id,
+        created_at: p.created_at,
+        amount_paid: p.amount_paid,
+        tutor_share: (Number(p.amount_paid) || 0) * 0.65,
+        platform_share: (Number(p.amount_paid) || 0) * 0.35,
+        course_title: course.title || 'Unknown',
+        course_price: course.price || 0,
+        tutor_name: tutor.full_name || 'Unknown',
+        tutor_email: tutor.email || '',
+        student_name: student.full_name || 'Unknown',
+        student_email: student.email || '',
+      };
+    });
+  },
+
+  async adminGetAllWithdrawals() {
+    const { data: withdrawals, error } = await supabase
+      .from('tutor_withdrawals')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    if (!withdrawals || withdrawals.length === 0) return [];
+
+    const tutorIds = [...new Set(withdrawals.map(w => w.tutor_id))];
+    const { data: tutors } = await supabase
+      .from('users')
+      .select('id, full_name, email')
+      .in('id', tutorIds as string[]);
+
+    const tutorMap = (tutors || []).reduce((acc: any, u: any) => { acc[u.id] = u; return acc; }, {});
+
+    return withdrawals.map(w => ({
+      ...w,
+      tutor: tutorMap[w.tutor_id] || { full_name: 'Unknown', email: '' },
+    }));
+  },
+
+  async adminApproveWithdrawal(withdrawalId: string, tutorId: string) {
+    // 1. Update withdrawal status
+    const { error } = await supabase
+      .from('tutor_withdrawals')
+      .update({ status: 'approved', updated_at: new Date().toISOString() })
+      .eq('id', withdrawalId);
+
+    if (error) throw error;
+
+    // 2. Create a notification for the tutor
+    await supabase.from('notifications').insert({
+      user_id: tutorId,
+      title: 'Withdrawal Request Approved',
+      message: 'Your withdrawal request has been approved. You will be credited within 24 to 48 hours.',
+      type: 'payment',
+      read: false,
+    }).then(({ error: notifError }) => {
+      if (notifError) console.warn('Notification insert failed:', notifError.message);
+    });
+
+    return true;
+  },
+
+  async adminRejectWithdrawal(withdrawalId: string, note: string) {
+    const { error } = await supabase
+      .from('tutor_withdrawals')
+      .update({ status: 'rejected', admin_note: note, updated_at: new Date().toISOString() })
+      .eq('id', withdrawalId);
+
+    if (error) throw error;
+    return true;
+  },
 };

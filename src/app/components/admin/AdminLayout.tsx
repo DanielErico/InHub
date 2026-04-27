@@ -12,7 +12,8 @@ import {
   Menu,
   X,
   Search,
-  ClipboardList
+  ClipboardList,
+  Wallet,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Input } from "./ui/input";
@@ -23,6 +24,7 @@ const navigation = [
   { name: "Courses", href: "/app/admin/courses", icon: BookOpen },
   { name: "Assignments", href: "/app/admin/assignments", icon: FileText },
   { name: "Surveys", href: "/app/admin/surveys", icon: ClipboardList },
+  { name: "Finance", href: "/app/admin/finance", icon: Wallet },
   { name: "AI Analytics", href: "/app/admin/ai-analytics", icon: Brain },
   { name: "Notifications", href: "/app/admin/notifications", icon: Bell },
   { name: "Settings", href: "/app/admin/settings", icon: Settings },

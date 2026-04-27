@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
-import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap, AlertCircle, RefreshCw } from "lucide-react";
+import { useNavigate, Link } from "react-router";
+import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap, AlertCircle, RefreshCw, Shield } from "lucide-react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { Logo } from "../ui/Logo";
 import { supabase } from "../../../lib/supabase";
@@ -20,6 +20,7 @@ export default function AuthPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [agreedToTutorTC, setAgreedToTutorTC] = useState(false);
   const navigate = useNavigate();
 
   // Start a resend cooldown timer
@@ -51,6 +52,11 @@ export default function AuthPage() {
         }
         if (password.length < 6) {
           setError("Password must be at least 6 characters");
+          setIsLoading(false);
+          return;
+        }
+        if (role === "tutor" && !agreedToTutorTC) {
+          setError("You must read and agree to the InternConnect Tutor Agreement to continue.");
           setIsLoading(false);
           return;
         }
@@ -536,6 +542,38 @@ export default function AuthPage() {
                         {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Tutor Agreement Checkbox */}
+                {mode === "signup" && role === "tutor" && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        id="tutor-tc"
+                        checked={agreedToTutorTC}
+                        onChange={e => setAgreedToTutorTC(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500 cursor-pointer flex-shrink-0"
+                      />
+                      <label htmlFor="tutor-tc" className="text-xs text-blue-800 leading-relaxed cursor-pointer">
+                        I have read and agree to the{" "}
+                        <Link
+                          to="/tutor-agreement"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-700 font-bold underline hover:text-blue-900 transition-colors"
+                        >
+                          InternConnect Tutor Agreement
+                        </Link>
+                        , including the revenue split policy (65% tutor / 35% platform) and the 70/30 disbursement schedule.
+                      </label>
+                    </div>
+                    {mode === "signup" && role === "tutor" && !agreedToTutorTC && (
+                      <p className="text-xs text-blue-600 flex items-center gap-1">
+                        <Shield className="w-3.5 h-3.5" /> Please read and accept the agreement to continue.
+                      </p>
+                    )}
                   </div>
                 )}
 

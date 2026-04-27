@@ -15,6 +15,7 @@ import {
   Moon,
   AlertTriangle,
   MessageSquare,
+  Wallet,
 } from "lucide-react";
 import { user } from "../../data/mockData";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -33,6 +34,7 @@ const navItems = [
   { to: "/app/tutor/students", icon: Users, label: "My Students", id: "nav-students" },
   { to: "/app/tutor/assignments", icon: ClipboardList, label: "Assignments", id: "nav-assignments" },
   { to: "/app/tutor/messages", icon: MessageSquare, label: "Messages", id: "nav-messages" },
+  { to: "/app/tutor/finance", icon: Wallet, label: "Finance", id: "nav-finance" },
   { to: "/app/tutor/schedule", icon: Calendar, label: "Schedule", id: "nav-schedules" },
   { to: "/app/tutor/ai-tools", icon: Sparkles, label: "AI Tools", id: "nav-ai-tools" },
   { to: "/app/tutor/settings", icon: Settings, label: "Settings", id: "nav-settings" },

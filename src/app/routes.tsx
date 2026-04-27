@@ -22,6 +22,9 @@ import TutorCourseDetailsPage from "./components/tutor/TutorCourseDetailsPage";
 import TutorAssignmentsPage from "./components/tutor/TutorAssignmentsPage";
 import TutorAssignmentDetailPage from "./components/tutor/TutorAssignmentDetailPage";
 import MessagesPage from "./components/messages/MessagesPage";
+import TutorFinancePage from "./components/tutor/TutorFinancePage";
+import TutorAgreementPage from "./components/auth/TutorAgreementPage";
+import { AdminFinancePage } from "./components/admin/pages/AdminFinancePage";
 
 import { AdminLayout } from "./components/admin/AdminLayout";
 import { DashboardPage as AdminDashboardPage } from "./components/admin/pages/DashboardPage";
@@ -134,6 +137,10 @@ export const router = createBrowserRouter([
     Component: AuthCallbackPage,
   },
   {
+    path: "/tutor-agreement",
+    Component: TutorAgreementPage,
+  },
+  {
     path: "/app",
     Component: Layout,
     loader: authLoader,
@@ -229,6 +236,10 @@ export const router = createBrowserRouter([
         path: "messages",
         Component: MessagesPage,
       },
+      {
+        path: "finance",
+        Component: TutorFinancePage,
+      },
     ],
   },
   {
@@ -267,6 +278,10 @@ export const router = createBrowserRouter([
       {
         path: "surveys",
         Component: AdminSurveysPage,
+      },
+      {
+        path: "finance",
+        Component: AdminFinancePage,
       },
       {
         path: "settings",

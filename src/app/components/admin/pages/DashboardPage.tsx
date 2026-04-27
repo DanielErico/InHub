@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Users, GraduationCap, UserCheck, BookOpen } from "lucide-react";
+import { Link } from "react-router";
+import { Users, GraduationCap, UserCheck, BookOpen, Wallet, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import {
   LineChart,
@@ -176,6 +177,20 @@ export function DashboardPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link to="/app/admin/finance" className="bg-gradient-to-br from-blue-700 to-blue-900 rounded-2xl p-6 text-white hover:shadow-lg hover:shadow-blue-900/20 transition-all group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <Wallet className="w-6 h-6 text-white" />
+            </div>
+            <ArrowRight className="w-5 h-5 text-blue-200 group-hover:translate-x-1 transition-transform" />
+          </div>
+          <h3 className="text-xl font-bold mb-1">Finance & Withdrawals</h3>
+          <p className="text-blue-100 text-sm">Review platform revenue, export purchases, and approve tutor withdrawals.</p>
+        </Link>
       </div>
 
       {/* Charts */}
