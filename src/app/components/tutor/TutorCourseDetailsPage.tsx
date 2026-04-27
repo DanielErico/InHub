@@ -37,6 +37,7 @@ export default function TutorCourseDetailsPage() {
   const [uploadTitle, setUploadTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -92,10 +93,11 @@ export default function TutorCourseDetailsPage() {
 
     try {
       setUploading(true);
+      setUploadProgress(0);
       if (showUploadModal === "video") {
-        await courseService.uploadVideo(courseId!, uploadTitle, file);
+        await courseService.uploadVideo(courseId!, uploadTitle, file, setUploadProgress);
       } else if (showUploadModal === "pdf") {
-        await courseService.uploadPdf(courseId!, uploadTitle, file);
+        await courseService.uploadPdf(courseId!, uploadTitle, file, setUploadProgress);
       }
       alert(`${showUploadModal} uploaded successfully!`);
       handleModalClose();
@@ -112,6 +114,7 @@ export default function TutorCourseDetailsPage() {
     setShowUploadModal(null);
     setUploadTitle("");
     setFile(null);
+    setUploadProgress(0);
   };
 
   const handleSubmitForReview = async () => {
@@ -355,6 +358,21 @@ export default function TutorCourseDetailsPage() {
                     </div>
                   )}
                 </div>
+
+                {uploading && (
+                  <div className="mt-4 w-full bg-muted/30 p-4 rounded-xl border border-border">
+                    <div className="flex justify-between text-xs font-medium text-foreground mb-1.5">
+                      <span>Uploading {file?.name}...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-600 transition-all duration-300" 
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             

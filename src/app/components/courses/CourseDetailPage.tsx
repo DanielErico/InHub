@@ -429,13 +429,41 @@ export default function CourseDetailPage() {
                 )}
               </div>
 
-              {/* Certificate Preview (If tutor has one) */}
-              {course.has_tutor_certificate && course.tutor_certificate_sample_url && (
+              {/* Certificate Previews */}
+              <div className="space-y-8 pt-4">
+                {/* Default InHub Certificate Preview */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-foreground">Certificate Preview</h3>
+                    <h3 className="text-sm font-bold text-foreground">InHub Official Certificate Preview</h3>
                     <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Sample</span>
                   </div>
+                  <div className="relative group aspect-video md:aspect-[16/7] bg-muted rounded-2xl border border-border overflow-hidden shadow-inner">
+                    <img 
+                      src="/inhub-certificate.png" 
+                      alt="InHub Certificate Sample" 
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                    />
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors" />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <a 
+                        href="/inhub-certificate.png" 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="bg-white/90 backdrop-blur-sm text-foreground px-5 py-2.5 rounded-2xl text-sm font-bold shadow-2xl flex items-center gap-2 hover:bg-white transition-all scale-90 group-hover:scale-100"
+                      >
+                        <Maximize className="w-4 h-4" /> Enlarge Preview
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tutor Certificate Preview (If tutor has one) */}
+                {course.has_tutor_certificate && course.tutor_certificate_sample_url && (
+                  <div className="space-y-4 pt-6 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-foreground">Instructor Certificate Preview</h3>
+                      <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Sample</span>
+                    </div>
                   <div className="relative group aspect-video md:aspect-[16/7] bg-muted rounded-2xl border border-border overflow-hidden shadow-inner">
                     {course.tutor_certificate_sample_url.toLowerCase().endsWith('.pdf') ? (
                       <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-slate-50">
@@ -479,6 +507,7 @@ export default function CourseDetailPage() {
                   )}
                 </div>
               )}
+              </div>
             </div>
           </section>
 

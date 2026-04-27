@@ -12,6 +12,7 @@ export interface UserProfile {
   website: string | null;
   linkedin: string | null;
   has_completed_onboarding: boolean;
+  created_at?: string;
 }
 
 interface UserProfileContextValue {
@@ -42,12 +43,15 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
       }
       const { data } = await supabase
         .from("users")
-        .select("id, full_name, role, avatar_url, bio, location, website, linkedin, has_completed_onboarding")
+        .select("id, full_name, role, avatar_url, bio, location, website, linkedin, has_completed_onboarding, created_at")
         .eq("id", authUser.id)
         .maybeSingle();
 
       const localDone = localStorage.getItem(`onboarding_${authUser.id}`) === 'true';
-      const completedOnboarding = data?.has_completed_onboarding || localDone || onboardingDone;
+      
+      // Bypass onboarding for old accounts (created before April 26, 2026)
+      const isOldAccount = data?.created_at && new Date(data.created_at) < new Date('2026-04-26T00:00:00Z');
+      const completedOnboarding = data?.has_completed_onboarding || localDone || onboardingDone || isOldAccount;
 
       setProfile({
         id: authUser.id,
@@ -59,7 +63,8 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
         location: data?.location ?? null,
         website: data?.website ?? null,
         linkedin: data?.linkedin ?? null,
-        has_completed_onboarding: completedOnboarding,
+        has_completed_onboarding: !!completedOnboarding,
+        created_at: data?.created_at,
       });
 
       if (completedOnboarding) setOnboardingDone(true);

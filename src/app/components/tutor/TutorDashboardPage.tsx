@@ -46,6 +46,7 @@ export default function TutorDashboardPage() {
     { label: "Total Students", value: statsData?.totalStudents || 0, trend: "Active", icon: Users, color: "blue" },
     { label: "Total Courses", value: statsData?.totalCourses || 0, trend: "Published", icon: BookOpen, color: "emerald" },
     { label: "Total Lessons", value: statsData?.totalLessons || 0, trend: "Uploaded", icon: Video, color: "purple" },
+    { label: "Total Revenue", value: `₦${(statsData?.totalRevenue || 0).toLocaleString()}`, trend: "Earned", icon: TrendingUp, color: "amber" },
   ];
 
   return (
@@ -63,7 +64,7 @@ export default function TutorDashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div id="tutor-stats" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div id="tutor-stats" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => (
           <div key={stat.label} className="bg-card p-6 rounded-2xl border border-border shadow-sm">
             <div className="flex items-center justify-between mb-4">

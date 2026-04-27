@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { uploadFileWithProgress } from '../lib/uploadHelper';
 
 export interface CourseModule {
   title: string;
@@ -232,13 +233,14 @@ export const courseService = {
       totalLessons = count || 0;
     }
 
-    // Total Students (purchases)
+    // Total Students (purchases) and Revenue
     let totalStudents = 0;
+    let totalRevenue = 0;
     let recentPurchases: any[] = [];
     if (courseIds.length > 0) {
       const { data: purchases, error: purchaseError } = await supabase
         .from('purchases')
-        .select('created_at, user_id, course_id')
+        .select('created_at, user_id, course_id, amount_paid')
         .in('course_id', courseIds)
         .eq('status', 'success')
         .order('created_at', { ascending: false });
@@ -251,6 +253,9 @@ export const courseService = {
         // Unique students
         const uniqueStudents = new Set(purchases.map(p => p.user_id));
         totalStudents = uniqueStudents.size;
+        
+        // Total revenue
+        totalRevenue = purchases.reduce((sum, p) => sum + (Number(p.amount_paid) || 0), 0);
         
         // Let's get the 4 most recent purchases and fetch the student details
         const recent = purchases.slice(0, 4);
@@ -286,6 +291,7 @@ export const courseService = {
       totalCourses,
       totalLessons,
       totalStudents,
+      totalRevenue,
       recentPurchases,
       recentCourses
     };
@@ -467,7 +473,7 @@ export const courseService = {
     return data as Course;
   },
 
-  async createCourse(title: string, category: string, price: number, file: File | null) {
+  async createCourse(title: string, category: string, price: number, file: File | null, onProgress?: (progress: number) => void) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('You must be logged in to create a course');
 
@@ -475,17 +481,7 @@ export const courseService = {
     
     if (file) {
       const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const { error: uploadError } = await supabase.storage
-        .from('course-content')
-        .upload(`thumbnails/${fileName}`, file, { cacheControl: '3600', upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage
-        .from('course-content')
-        .getPublicUrl(`thumbnails/${fileName}`);
-        
-      thumbnailUrl = publicUrlData.publicUrl;
+      thumbnailUrl = await uploadFileWithProgress('course-content', `thumbnails/${fileName}`, file, onProgress);
     }
 
     const { data, error } = await supabase
@@ -505,19 +501,9 @@ export const courseService = {
     return data as Course;
   },
 
-  async uploadCourseThumbnail(courseId: string, file: File): Promise<string> {
+  async uploadCourseThumbnail(courseId: string, file: File, onProgress?: (progress: number) => void): Promise<string> {
     const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    const { error: uploadError } = await supabase.storage
-      .from('course-content')
-      .upload(`thumbnails/${fileName}`, file, { cacheControl: '3600', upsert: true });
-
-    if (uploadError) throw uploadError;
-
-    const { data: publicUrlData } = supabase.storage
-      .from('course-content')
-      .getPublicUrl(`thumbnails/${fileName}`);
-
-    const thumbnailUrl = publicUrlData.publicUrl;
+    const thumbnailUrl = await uploadFileWithProgress('course-content', `thumbnails/${fileName}`, file, onProgress);
 
     const { error: updateError } = await supabase
       .from('courses')
@@ -529,19 +515,9 @@ export const courseService = {
     return thumbnailUrl;
   },
   
-  async uploadCertificateSample(courseId: string, file: File): Promise<string> {
+  async uploadCertificateSample(courseId: string, file: File, onProgress?: (progress: number) => void): Promise<string> {
     const fileName = `${Date.now()}-cert-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    const { error: uploadError } = await supabase.storage
-      .from('course-content')
-      .upload(`certificates/${fileName}`, file, { cacheControl: '3600', upsert: true });
-
-    if (uploadError) throw uploadError;
-
-    const { data: publicUrlData } = supabase.storage
-      .from('course-content')
-      .getPublicUrl(`certificates/${fileName}`);
-
-    const certUrl = publicUrlData.publicUrl;
+    const certUrl = await uploadFileWithProgress('course-content', `certificates/${fileName}`, file, onProgress);
 
     await supabase
       .from('courses')
@@ -583,18 +559,9 @@ export const courseService = {
     return data as Lesson[];
   },
 
-  async uploadVideo(courseId: string, title: string, file: File) {
+  async uploadVideo(courseId: string, title: string, file: File, onProgress?: (progress: number) => void) {
     const fileName = `${courseId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('course-content')
-      .upload(`videos/${fileName}`, file, { cacheControl: '3600', upsert: true });
-
-    if (uploadError) throw uploadError;
-
-    const { data: publicUrlData } = supabase.storage
-      .from('course-content')
-      .getPublicUrl(`videos/${fileName}`);
+    const videoUrl = await uploadFileWithProgress('course-content', `videos/${fileName}`, file, onProgress);
 
     const { count } = await supabase
       .from('lessons')
@@ -606,7 +573,7 @@ export const courseService = {
       .insert({
         course_id: courseId,
         title,
-        video_url: publicUrlData.publicUrl,
+        video_url: videoUrl,
         duration: 'New',
         order_index: count || 0,
       })
@@ -634,25 +601,16 @@ export const courseService = {
     return data as Resource[];
   },
 
-  async uploadPdf(courseId: string, title: string, file: File) {
+  async uploadPdf(courseId: string, title: string, file: File, onProgress?: (progress: number) => void) {
     const fileName = `${courseId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-    
-    const { error: uploadError } = await supabase.storage
-      .from('course-content')
-      .upload(`pdfs/${fileName}`, file, { cacheControl: '3600', upsert: true });
-
-    if (uploadError) throw uploadError;
-
-    const { data: publicUrlData } = supabase.storage
-      .from('course-content')
-      .getPublicUrl(`pdfs/${fileName}`);
+    const fileUrl = await uploadFileWithProgress('course-content', `pdfs/${fileName}`, file, onProgress);
 
     const { data, error } = await supabase
       .from('resources')
       .insert({
         course_id: courseId,
         title,
-        file_url: publicUrlData.publicUrl,
+        file_url: fileUrl,
         file_type: 'pdf',
       })
       .select()

@@ -11,6 +11,8 @@ const FORMATS = ["Video Lessons","PDF Materials","Live Sessions","Recorded Sessi
 export function CourseInfoForm({ course, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadState, setUploadState] = useState("");
 
   const [level, setLevel] = useState<string>(course.level || "");
   const [language, setLanguage] = useState(course.language || "English");
@@ -52,16 +54,23 @@ export function CourseInfoForm({ course, onSaved }: Props) {
 
   const handleSave = async () => {
     setSaving(true);
+    setUploadProgress(0);
+    setUploadState("");
     try {
       let finalThumbnailUrl = thumbnailUrl;
       if (thumbnailFile) {
-        finalThumbnailUrl = await courseService.uploadCourseThumbnail(course.id, thumbnailFile);
+        setUploadState("Uploading Thumbnail...");
+        finalThumbnailUrl = await courseService.uploadCourseThumbnail(course.id, thumbnailFile, setUploadProgress);
       }
 
       let finalCertSampleUrl = certSampleUrl;
       if (certFile) {
-        finalCertSampleUrl = await courseService.uploadCertificateSample(course.id, certFile);
+        setUploadState("Uploading Certificate...");
+        setUploadProgress(0);
+        finalCertSampleUrl = await courseService.uploadCertificateSample(course.id, certFile, setUploadProgress);
       }
+      
+      setUploadState("Saving Details...");
 
       await courseService.updateCourseDetails(course.id, {
         level: level as any,
@@ -88,6 +97,8 @@ export function CourseInfoForm({ course, onSaved }: Props) {
       alert("Save failed: " + err.message);
     } finally {
       setSaving(false);
+      setUploadState("");
+      setUploadProgress(0);
     }
   };
 
@@ -292,11 +303,28 @@ export function CourseInfoForm({ course, onSaved }: Props) {
       </div>
 
       {/* Save Button */}
-      <div className="flex justify-end gap-3 pb-6">
-        {saved && <span className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">✅ Saved successfully</span>}
-        <button onClick={handleSave} disabled={saving} className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2.5 rounded-xl font-semibold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 disabled:opacity-60 transition-colors">
-          {saving ? <><Loader2 className="w-4 h-4 animate-spin"/>Saving...</> : <><Save className="w-4 h-4"/>Save Course Info</>}
-        </button>
+      <div className="flex flex-col items-end gap-3 pb-6">
+        <div className="flex items-center gap-3">
+          {saved && <span className="text-sm text-emerald-600 font-medium flex items-center gap-1.5">✅ Saved successfully</span>}
+          <button onClick={handleSave} disabled={saving} className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2.5 rounded-xl font-semibold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 disabled:opacity-60 transition-colors">
+            {saving ? <><Loader2 className="w-4 h-4 animate-spin"/>Saving...</> : <><Save className="w-4 h-4"/>Save Course Info</>}
+          </button>
+        </div>
+        
+        {saving && uploadState && uploadState.startsWith("Uploading") && (
+          <div className="w-64 space-y-1.5 bg-card border border-border p-3 rounded-xl shadow-sm">
+            <div className="flex justify-between text-xs font-medium text-foreground">
+              <span>{uploadState}</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-blue-600 transition-all duration-300" 
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

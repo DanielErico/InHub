@@ -191,7 +191,12 @@ export default function CoursePlayerPage() {
   const [chatError, setChatError] = useState<string | null>(null);
 
   const [volume, setVolume] = useState(80);
-  const [progress, setProgress] = useState(35);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Paystack Integration
@@ -232,6 +237,40 @@ export default function CoursePlayerPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [displayMessages, isTyping]);
+
+  // Video Player Logic
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isPlaying && videoRef.current.paused) {
+        videoRef.current.play().catch(() => setIsPlaying(false));
+      } else if (!isPlaying && !videoRef.current.paused) {
+        videoRef.current.pause();
+      }
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = volume / 100;
+    }
+  }, [volume]);
+
+  const toggleFullscreen = () => {
+    if (playerContainerRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        playerContainerRef.current.requestFullscreen();
+      }
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    if (isNaN(seconds)) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   const generateNotes = useCallback(async () => {
     setIsGeneratingNotes(true);
@@ -373,96 +412,131 @@ export default function CoursePlayerPage() {
             ) : null}
             
             {activeLesson?.video_url && hasPurchased ? (
-              <video 
-                src={activeLesson.video_url} 
-                className="w-full h-full object-cover" 
-                controls 
-                autoPlay 
-                onEnded={async () => {
-                  if (profile?.id && activeLesson) {
-                    await courseService.markLessonComplete(profile.id, activeLesson.id, course.id);
-                    setCompletedLessons(prev => [...new Set([...prev, activeLesson.id])]);
-                    // toast is imported as CheckCircle2 but maybe user wants a real toast. 
-                    // I'll check if toast is imported.
-                  }
-                }}
-              />
+              <div ref={playerContainerRef} className="w-full h-full relative group/player">
+                <video 
+                  ref={videoRef}
+                  src={activeLesson.video_url} 
+                  className="w-full h-full object-cover" 
+                  autoPlay 
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onTimeUpdate={() => {
+                    if (videoRef.current) {
+                      setCurrentTime(videoRef.current.currentTime);
+                      setProgress((videoRef.current.currentTime / videoRef.current.duration) * 100 || 0);
+                    }
+                  }}
+                  onLoadedMetadata={() => {
+                    if (videoRef.current) {
+                      setDuration(videoRef.current.duration);
+                    }
+                  }}
+                  onEnded={async () => {
+                    if (profile?.id && activeLesson) {
+                      await courseService.markLessonComplete(profile.id, activeLesson.id, course.id);
+                      setCompletedLessons(prev => [...new Set([...prev, activeLesson.id])]);
+                    }
+                  }}
+                />
+                
+                {/* Custom Controls Overlay */}
+                <div className={`absolute inset-0 flex flex-col justify-between p-4 sm:p-6 transition-opacity duration-300 ${isPlaying ? 'opacity-0 group-hover/player:opacity-100' : 'opacity-100'} bg-gradient-to-t from-black/60 via-transparent to-black/30 pointer-events-none`}>
+                  <div className="flex items-center justify-between">
+                    <div className="bg-black/40 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2 pointer-events-auto">
+                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                      <span className="text-white text-xs font-medium">LESSON {lessons.indexOf(activeLesson) + 1}</span>
+                    </div>
+                    <div className="flex items-center gap-2 pointer-events-auto">
+                      <button className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
+                        <Settings className="w-4 h-4 text-white" />
+                      </button>
+                      <button onClick={toggleFullscreen} className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
+                        <Maximize className="w-4 h-4 text-white" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-center">
+                    <button
+                      onClick={() => setIsPlaying(!isPlaying)}
+                      className="w-16 h-16 bg-blue-700/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-blue-700 transition-all shadow-xl shadow-blue-950/30 hover:scale-110 active:scale-95 pointer-events-auto"
+                    >
+                      {isPlaying ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 text-white fill-white ml-1" />}
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div 
+                      className="group cursor-pointer pointer-events-auto py-2"
+                      onClick={(e) => {
+                        if (videoRef.current) {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                          videoRef.current.currentTime = pos * duration;
+                        }
+                      }}
+                    >
+                      <div className="bg-card/30 rounded-full h-1.5 group-hover:h-2 transition-all">
+                        <div className="bg-blue-600 h-full rounded-full relative" style={{ width: `${progress}%` }}>
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity transform translate-x-1/2" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => {
+                            const idx = lessons.indexOf(activeLesson);
+                            if (idx > 0) setActiveLesson(lessons[idx - 1]);
+                          }}
+                          className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
+                        >
+                          <SkipBack className="w-5 h-5" />
+                        </button>
+                        <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto">
+                          {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            const idx = lessons.indexOf(activeLesson);
+                            if (idx < lessons.length - 1) setActiveLesson(lessons[idx + 1]);
+                          }}
+                          className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
+                        >
+                          <SkipForward className="w-5 h-5" />
+                        </button>
+                        <div className="flex items-center gap-2 pointer-events-auto group/volume">
+                          <Volume2 className="w-4 h-4 text-white/80 hover:text-white transition-colors cursor-pointer" onClick={() => setVolume(volume === 0 ? 80 : 0)} />
+                          <div 
+                            className="w-0 group-hover/volume:w-20 overflow-hidden transition-all duration-300"
+                          >
+                            <div 
+                              className="w-20 bg-card/30 rounded-full h-1.5 cursor-pointer py-2 flex items-center"
+                              onClick={(e) => {
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                                setVolume(pos * 100);
+                              }}
+                            >
+                              <div className="bg-white h-1.5 rounded-full" style={{ width: `${volume}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-white/80 text-xs font-medium ml-2">
+                          {formatTime(currentTime)} / {formatTime(duration)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
               <ImageWithFallback
                 src={course.thumbnail_url || course.thumbnail}
                 alt={course.title}
                 className="w-full h-full object-cover opacity-60"
               />
-            )}
-            
-            {hasPurchased && activeLesson && (
-              <div className={`absolute inset-0 flex flex-col justify-between p-4 sm:p-6 ${activeLesson.video_url ? 'pointer-events-none opacity-0 hover:opacity-100 transition-opacity' : ''}`}>
-                <div className="flex items-center justify-between">
-                  <div className="bg-black/40 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-white text-xs font-medium">LESSON {lessons.indexOf(activeLesson) + 1}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
-                      <Settings className="w-4 h-4 text-white" />
-                    </button>
-                    <button className="p-2 bg-black/40 backdrop-blur-sm rounded-lg hover:bg-black/60 transition-colors">
-                      <Maximize className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-center">
-                  <button
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    className="w-16 h-16 bg-blue-700/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-blue-700 transition-all shadow-xl shadow-blue-950/30 hover:scale-110 active:scale-95 pointer-events-auto"
-                  >
-                    {isPlaying ? <Pause className="w-7 h-7 text-white" /> : <Play className="w-7 h-7 text-white fill-white ml-1" />}
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  <div className="group cursor-pointer pointer-events-auto">
-                    <div className="bg-card/20 rounded-full h-1 group-hover:h-1.5 transition-all">
-                      <div className="bg-blue-600 h-full rounded-full relative" style={{ width: `${progress}%` }}>
-                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-card rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => {
-                          const idx = lessons.indexOf(activeLesson);
-                          if (idx > 0) setActiveLesson(lessons[idx - 1]);
-                        }}
-                        className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
-                      >
-                        <SkipBack className="w-5 h-5" />
-                      </button>
-                      <button onClick={() => setIsPlaying(!isPlaying)} className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto">
-                        {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          const idx = lessons.indexOf(activeLesson);
-                          if (idx < lessons.length - 1) setActiveLesson(lessons[idx + 1]);
-                        }}
-                        className="p-1.5 text-white/80 hover:text-white transition-colors pointer-events-auto"
-                      >
-                        <SkipForward className="w-5 h-5" />
-                      </button>
-                      <div className="flex items-center gap-2 pointer-events-auto">
-                        <Volume2 className="w-4 h-4 text-white/70" />
-                        <div className="w-20 bg-card/20 rounded-full h-1 cursor-pointer">
-                          <div className="bg-card h-full rounded-full" style={{ width: `${volume}%` }} />
-                        </div>
-                      </div>
-                      <span className="text-white/70 text-xs">
-                        {Math.floor((progress / 100) * 28)}:{String(Math.floor(((progress / 100) * 28 * 60) % 60)).padStart(2, "0")} / {activeLesson.duration || "0:00"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
             )}
           </div>
         </div>

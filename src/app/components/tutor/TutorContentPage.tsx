@@ -38,6 +38,7 @@ type UploadType = "course" | "pdf" | "video" | null;
 
 export default function TutorContentPage() {
   const [courses, setCourses] = useState<Course[]>([]);
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   
@@ -62,11 +63,15 @@ export default function TutorContentPage() {
   const fetchCourses = async () => {
     try {
       setLoading(true);
-      const data = await courseService.getTutorCourses();
-      setCourses(data);
-      if (data.length > 0) setSelectedCourseId(data[0].id);
+      const [coursesData, statsData] = await Promise.all([
+        courseService.getTutorCourses(),
+        courseService.getTutorStats()
+      ]);
+      setCourses(coursesData);
+      setStats(statsData);
+      if (coursesData.length > 0) setSelectedCourseId(coursesData[0].id);
     } catch (error) {
-      console.error("Error fetching courses:", error);
+      console.error("Error fetching courses and stats:", error);
     } finally {
       setLoading(false);
     }
@@ -86,8 +91,8 @@ export default function TutorContentPage() {
 
   const summaryStats = [
     { label: "Total Courses", value: courses.length.toString(), icon: BookOpen, color: "blue" },
-    { label: "Total Students", value: "0", icon: Users, color: "purple" },
-    { label: "Total Revenue", value: "$0", icon: TrendingUp, color: "emerald" },
+    { label: "Total Students", value: (stats?.totalStudents || 0).toString(), icon: Users, color: "purple" },
+    { label: "Total Revenue", value: `₦${(stats?.totalRevenue || 0).toLocaleString()}`, icon: TrendingUp, color: "emerald" },
   ];
 
   const handleModalClose = () => {

@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { chatCompletion, MODELS } from '../app/services/nvidia';
-// removed uuid import
+import { uploadFileWithProgress } from '../lib/uploadHelper';
 
 export interface Message {
   id: string;
@@ -86,7 +86,7 @@ export const messageService = {
 
   // === Messaging === //
 
-  async sendMessage(receiverId: string, content: string, imageFile?: File, courseId?: string) {
+  async sendMessage(receiverId: string, content: string, imageFile?: File, courseId?: string, onProgress?: (progress: number) => void) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
@@ -108,17 +108,7 @@ export const messageService = {
       const fileName = `${crypto.randomUUID()}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('chat_attachments')
-        .upload(filePath, imageFile);
-
-      if (uploadError) throw new Error(`Image upload failed: ${uploadError.message}`);
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('chat_attachments')
-        .getPublicUrl(filePath);
-
-      finalImageUrl = publicUrl;
+      finalImageUrl = await uploadFileWithProgress('chat_attachments', filePath, imageFile, onProgress);
     }
 
     // 3. Send Message

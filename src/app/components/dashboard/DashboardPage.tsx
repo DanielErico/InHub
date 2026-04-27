@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Library,
   Loader2,
+  ClipboardList,
 } from "lucide-react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { courseService, Assignment, ScheduleSession } from "../../../services/courseService";
@@ -99,6 +100,7 @@ export default function DashboardPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [sessions, setSessions] = useState<ScheduleSession[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
+  const [completedLessons, setCompletedLessons] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -109,18 +111,20 @@ export default function DashboardPage() {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const [coursesData, purchasedData, assignmentsData, sessionsData, progressVal] = await Promise.all([
+      const [coursesData, purchasedData, assignmentsData, sessionsData, progressVal, completionsData] = await Promise.all([
         courseService.getAllPublishedCourses(),
         courseService.getPurchasedCourses(),
         courseService.getAssignments(profile!.id),
         courseService.getScheduleSessions(profile!.id),
         courseService.getOverallProgress(profile!.id),
+        courseService.getStudentCompletions(profile!.id),
       ]);
       setPublishedCourses(coursesData || []);
       setPurchasedCourses(purchasedData || []);
       setAssignments(assignmentsData || []);
       setSessions(sessionsData || []);
       setOverallProgress(progressVal);
+      setCompletedLessons(completionsData?.length || 0);
     } catch (error) {
       console.error("Dashboard error:", error);
     } finally {
@@ -164,7 +168,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
           <div className="flex items-start justify-between mb-3">
             <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -186,23 +190,13 @@ export default function DashboardPage() {
           <p className="text-muted-foreground text-xs">Available Courses</p>
         </div>
 
-        <div className="bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center">
-              <Flame className="w-5 h-5 text-amber-500 dark:text-amber-400" />
-            </div>
-            <span className="flex items-center justify-center w-7 h-7 rounded-full bg-amber-50 dark:bg-amber-900/30">
-              <Flame className="w-4 h-4 text-amber-500" />
-            </span>
-          </div>
-          <p className="text-2xl text-foreground mb-0.5">0</p>
-          <p className="text-muted-foreground text-xs">Day Streak</p>
-        </div>
-
-        <div className="bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow">
+        <div 
+          onClick={() => navigate("/app/assignments")}
+          className="bg-card rounded-2xl p-5 shadow-sm border border-border hover:shadow-md transition-shadow cursor-pointer hover:border-rose-300"
+        >
           <div className="flex items-start justify-between mb-3">
             <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center">
-              <Award className="w-5 h-5 text-rose-500 dark:text-rose-400" />
+              <ClipboardList className="w-5 h-5 text-rose-500 dark:text-rose-400" />
             </div>
           </div>
           <p className="text-2xl text-foreground mb-0.5">{pendingAssignments.length}</p>
@@ -227,7 +221,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-4 text-xs text-blue-200">
                   <span className="flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    {0} lessons done
+                    {completedLessons} lessons done
                   </span>
                   <span className="flex items-center gap-1">
                     <Library className="w-3.5 h-3.5 text-blue-300" />

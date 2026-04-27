@@ -21,6 +21,7 @@ export default function MessagesPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -98,22 +99,19 @@ export default function MessagesPage() {
     if (!activeContact) return;
     if (!inputText.trim() && !imageFile) return;
 
-    const tempText = inputText;
-    const tempImg = imageFile;
-    setInputText("");
-    setImageFile(null);
     setIsSending(true);
+    setUploadProgress(0);
 
     try {
-      await messageService.sendMessage(activeContact.id, tempText, tempImg || undefined);
+      await messageService.sendMessage(activeContact.id, inputText, imageFile || undefined, undefined, setUploadProgress);
       await loadMessages(activeContact.id);
+      setInputText("");
+      setImageFile(null);
     } catch (err: any) {
       toast.error(err.message);
-      // Restore on fail
-      setInputText(tempText);
-      setImageFile(tempImg);
     } finally {
       setIsSending(false);
+      setUploadProgress(0);
     }
   };
 
@@ -251,15 +249,36 @@ export default function MessagesPage() {
           {/* Input Area */}
           <div className="p-4 border-t border-border bg-card">
             {imageFile && (
-              <div className="mb-3 flex items-center gap-2 p-2 bg-muted rounded-lg inline-flex relative group">
-                <img src={URL.createObjectURL(imageFile)} alt="Preview" className="w-10 h-10 object-cover rounded" />
-                <span className="text-xs text-muted-foreground max-w-[150px] truncate">{imageFile.name}</span>
-                <button 
-                  onClick={() => setImageFile(null)}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X className="w-3 h-3" />
-                </button>
+              <div className="mb-3 flex flex-col gap-2 p-3 bg-muted rounded-xl relative group w-fit min-w-[200px]">
+                <div className="flex items-center gap-3">
+                  <img src={URL.createObjectURL(imageFile)} alt="Preview" className="w-12 h-12 object-cover rounded-lg" />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-medium text-foreground max-w-[150px] truncate">{imageFile.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{(imageFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                  </div>
+                  {!isSending && (
+                    <button 
+                      onClick={() => setImageFile(null)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                {isSending && (
+                  <div className="w-full mt-1">
+                    <div className="flex justify-between text-[10px] font-medium text-muted-foreground mb-1">
+                      <span>Uploading...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-600 transition-all duration-300" 
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <div className="flex items-end gap-2">
