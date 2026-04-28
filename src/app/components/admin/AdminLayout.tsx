@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Input } from "./ui/input";
+import { GlobalSearch } from "../layout/GlobalSearch";
 
 const navigation = [
   { name: "Dashboard", href: "/app/admin", icon: LayoutDashboard },
@@ -146,14 +147,7 @@ export function AdminLayout() {
           <h2 className="text-lg font-semibold text-gray-900">{pageTitle}</h2>
 
           <div className="flex-1 max-w-md ml-auto">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                type="search"
-                placeholder="Search users or courses..."
-                className="pl-9 bg-gray-50 border-gray-200"
-              />
-            </div>
+            <GlobalSearch />
           </div>
 
           <button className="relative p-2 rounded-lg hover:bg-gray-100">

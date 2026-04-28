@@ -3,6 +3,7 @@ import { Bell, Search, Menu, BookOpen, ClipboardList, Calendar, LayoutDashboard,
 import { useUserProfile } from "../../context/UserProfileContext";
 import { supabase } from "../../../lib/supabase";
 import { useNavigate } from "react-router";
+import { GlobalSearch } from "./GlobalSearch";
 
 interface Notification {
   id: string;
@@ -142,12 +143,7 @@ export function Header({ onMenuClick, title }: HeaderProps) {
 
         {/* Search */}
         <div className="flex-1 max-w-md relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search courses, lessons..."
-            className="w-full pl-10 pr-4 py-2 bg-muted/50 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent focus:bg-background transition-all"
-          />
+          <GlobalSearch />
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
