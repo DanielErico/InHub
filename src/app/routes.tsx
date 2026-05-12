@@ -24,6 +24,7 @@ import TutorAssignmentDetailPage from "./components/tutor/TutorAssignmentDetailP
 import MessagesPage from "./components/messages/MessagesPage";
 import TutorFinancePage from "./components/tutor/TutorFinancePage";
 import TutorAgreementPage from "./components/auth/TutorAgreementPage";
+import ResetPasswordPage from "./components/auth/ResetPasswordPage";
 import { AdminFinancePage } from "./components/admin/pages/AdminFinancePage";
 
 import { AdminLayout } from "./components/admin/AdminLayout";
@@ -139,6 +140,10 @@ export const router = createBrowserRouter([
   {
     path: "/tutor-agreement",
     Component: TutorAgreementPage,
+  },
+  {
+    path: "/reset-password",
+    Component: ResetPasswordPage,
   },
   {
     path: "/app",

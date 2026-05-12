@@ -545,6 +545,14 @@ export const courseService = {
     if (error) throw error;
   },
 
+  async deleteCourse(courseId: string) {
+    const { error } = await supabase
+      .from('courses')
+      .delete()
+      .eq('id', courseId);
+    if (error) throw error;
+  },
+
 
   // === Lessons / Videos === //
 

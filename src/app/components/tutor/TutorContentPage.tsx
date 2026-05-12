@@ -115,6 +115,20 @@ export default function TutorContentPage() {
     }
   };
 
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!window.confirm("Are you sure you want to delete this course? This action cannot be undone.")) return;
+    try {
+      setLoading(true);
+      await courseService.deleteCourse(courseId);
+      alert("Course deleted successfully!");
+      fetchCourses();
+    } catch (error: any) {
+      console.error("Delete failed", error);
+      alert(`Delete failed: ${error.message}`);
+      setLoading(false);
+    }
+  };
+
   const handleUploadSubmit = async () => {
     if (!uploadTitle) return alert("Title is required");
     
@@ -249,48 +263,6 @@ export default function TutorContentPage() {
                 <span className={`absolute top-3 left-3 text-xs font-semibold px-2.5 py-1 rounded-lg border ${statusConfig[course.status]?.className || statusConfig['draft'].className}`}>
                   {statusConfig[course.status]?.label || "Draft"}
                 </span>
-                {/* Menu */}
-                <div className="absolute top-3 right-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenMenu(openMenu === course.id ? null : course.id);
-                    }}
-                    className="p-1.5 bg-card/90 backdrop-blur-sm rounded-lg hover:bg-card transition-colors"
-                  >
-                    <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                  </button>
-                  {openMenu === course.id && (
-                    <div className="absolute right-0 mt-1 w-40 bg-card rounded-xl shadow-lg border border-border z-10 overflow-hidden">
-                      {(course.status === 'draft' || course.status === 'needs_changes') && (
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); handleSubmitForReview(course.id); setOpenMenu(null); }}
-                          className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors"
-                        >
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Submit for Review
-                        </button>
-                      )}
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); navigate(`/app/tutor/content/${course.id}`); }}
-                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors"
-                      >
-                        <Eye className="w-4 h-4 text-muted-foreground/80" /> Manage Content
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); navigate(`/app/tutor/content/${course.id}`); }}
-                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted/50 transition-colors"
-                      >
-                        <Edit3 className="w-4 h-4 text-blue-500" /> Edit
-                      </button>
-                      <button 
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" /> Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Content */}
@@ -309,6 +281,39 @@ export default function TutorContentPage() {
                     <Users className="w-4 h-4 text-muted-foreground/80" />
                     <span className="text-sm font-semibold text-foreground">0</span>
                     <span className="text-xs text-muted-foreground">students</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {(course.status === 'draft' || course.status === 'needs_changes') && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleSubmitForReview(course.id); }}
+                        className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors tooltip-trigger"
+                        title="Submit for Review"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigate(`/app/tutor/content/${course.id}`); }}
+                      className="p-1.5 text-muted-foreground hover:bg-muted rounded-lg transition-colors"
+                      title="Manage Content"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); navigate(`/app/tutor/content/${course.id}`); }}
+                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDeleteCourse(course.id); }}
+                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>

@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
-import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap, AlertCircle, RefreshCw, Shield } from "lucide-react";
+import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap, AlertCircle, RefreshCw, Shield, Mail } from "lucide-react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { Logo } from "../ui/Logo";
 import { supabase } from "../../../lib/supabase";
 
 export default function AuthPage() {
-  const [mode, setMode] = useState<"login" | "signup" | "verify">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "verify" | "forgot">("login");
   const [role, setRole] = useState<"student" | "tutor">("student");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -236,6 +236,38 @@ export default function AuthPage() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMsg(null);
+    setIsLoading(true);
+    try {
+      const redirectTo = `${window.location.origin}/reset-password`;
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      });
+      console.log(resetError)
+      if (resetError) throw resetError;
+      setSuccessMsg("Check your email! We sent a password reset link to " + email + ". It may take a minute to arrive — check your spam folder too.");
+    } catch (err: any) {
+      console.error("Password reset error:", err);
+      if (err.status === 500 || err.message?.toLowerCase().includes("internal server") || err.message?.includes("Error sending recovery email")) {
+        setError(
+          "Supabase failed to send the email. This usually means you've hit the hourly rate limit (3 emails/hr) for the default Supabase mailer. " +
+          "To fix: Wait an hour, or configure a custom SMTP provider (like Resend) in Supabase Dashboard → Authentication → Providers."
+        );
+      } else if (err.message?.toLowerCase().includes("rate limit")) {
+        setError("Too many attempts. Please wait a minute before requesting another reset email.");
+      } else {
+        setError(err.message || "Failed to send reset email. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
   const handleGoogleLogin = async () => {
     setError(null);
     try {
@@ -337,13 +369,15 @@ export default function AuthPage() {
           {/* Header */}
           <div className="mb-8">
             <h2 className="text-3xl text-foreground mb-2">
-              {mode === "login" ? "Welcome back" : mode === "verify" ? "Check your email" : "Create account"}
+              {mode === "login" ? "Welcome back" : mode === "verify" ? "Check your email" : mode === "forgot" ? "Forgot Password?" : "Create account"}
             </h2>
             <p className="text-muted-foreground">
               {mode === "login"
                 ? "Sign in to continue your learning journey"
                 : mode === "verify"
                 ? "Enter the 6-digit code we sent you"
+                : mode === "forgot"
+                ? "Enter your email and we'll send you a reset link"
                 : "Start your learning journey today"}
             </p>
           </div>
@@ -364,7 +398,8 @@ export default function AuthPage() {
             </div>
           )}
 
-          {/* Role Toggle */}
+          {/* Role Toggle — hidden on forgot mode */}
+          {mode !== "forgot" && (
           <div className="flex bg-muted rounded-xl p-1 mb-6">
             <button
               onClick={() => setRole("student")}
@@ -389,8 +424,10 @@ export default function AuthPage() {
               Continue as Tutor
             </button>
           </div>
+          )}
 
-          {/* Social Login */}
+          {/* Social Login — hidden on forgot mode */}
+          {mode !== "forgot" && (
           <div className="space-y-3 mb-6">
             <button
               onClick={handleGoogleLogin}
@@ -405,13 +442,16 @@ export default function AuthPage() {
               Continue with Google
             </button>
           </div>
+          )}
 
-          {/* Divider */}
+          {/* Divider — hidden on forgot mode */}
+          {mode !== "forgot" && (
           <div className="flex items-center gap-3 mb-6">
             <div className="flex-1 h-px bg-slate-200" />
             <span className="text-muted-foreground/80 text-xs">or continue with email</span>
             <div className="flex-1 h-px bg-slate-200" />
           </div>
+          )}
 
           {/* Form */}
           {mode === "verify" ? (
@@ -472,6 +512,48 @@ export default function AuthPage() {
                 className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
               >
                 ← Back to Sign Up
+              </button>
+            </form>
+          ) : mode === "forgot" ? (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div>
+                <label className="block text-sm text-foreground/80 mb-1.5">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-700 focus:border-transparent transition-all"
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading || !email}
+                className="w-full bg-blue-700 hover:bg-blue-800 text-white rounded-xl py-3.5 text-sm font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-70 shadow-lg shadow-blue-400"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4" />
+                    Send Reset Link
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode("login"); setError(null); setSuccessMsg(null); }}
+                className="w-full text-sm text-muted-foreground hover:text-foreground py-2 transition-colors"
+              >
+                ← Back to Sign In
               </button>
             </form>
           ) : (
@@ -579,7 +661,11 @@ export default function AuthPage() {
 
                 {mode === "login" && (
                   <div className="flex justify-end">
-                    <button type="button" className="text-sm text-blue-700 hover:text-blue-800 transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => { setMode("forgot"); setError(null); setSuccessMsg(null); }}
+                      className="text-sm text-blue-700 hover:text-blue-800 transition-colors"
+                    >
                       Forgot password?
                     </button>
                   </div>

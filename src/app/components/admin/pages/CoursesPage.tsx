@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { supabase } from "../../../../lib/supabase";
 import { MoreVertical, Eye, Trash2, Filter } from "lucide-react";
+import { courseService } from "../../../../services/courseService";
 
 interface Course {
   id: string;
@@ -20,12 +21,6 @@ import {
   TableRow,
 } from "../ui/table";
 import { Button } from "../ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 import { Card } from "../ui/card";
 import { Progress } from "../ui/progress";
 import {
@@ -95,8 +90,18 @@ export function CoursesPage() {
     fetchCourses();
   }, []);
 
-  const handleConfirm = () => {
-    console.log(`${confirmAction.action} course:`, confirmAction.course?.title);
+  const handleConfirm = async () => {
+    if (confirmAction.action === "delete" && confirmAction.course) {
+      try {
+        setLoading(true);
+        await courseService.deleteCourse(confirmAction.course.id);
+        setCourses(courses.filter(c => c.id !== confirmAction.course!.id));
+      } catch (error) {
+        console.error("Error deleting course:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
     setConfirmAction({ open: false });
   };
 
@@ -178,32 +183,31 @@ export function CoursesPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/app/admin/courses/${course.id}/review`)}>
-                          <Eye className="w-4 h-4 mr-2" />
-                          {course.status === "pending_review" ? "Review Course" : "View Details"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-red-600"
-                          onClick={() =>
-                            setConfirmAction({
-                              open: true,
-                              course,
-                              action: "delete",
-                            })
-                          }
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-2 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/app/admin/courses/${course.id}/review`)}
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        {course.status === "pending_review" ? "Review" : "View"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setConfirmAction({
+                            open: true,
+                            course,
+                            action: "delete",
+                          })
+                        }
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -245,28 +249,28 @@ export function CoursesPage() {
                   </div>
                 </div>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setReviewCourseId(course.id)}>
-                    <Eye className="w-4 h-4 mr-2" />
-                    {course.status === "pending_review" ? "Review Course" : "View Details"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-red-600"
-                    onClick={() =>
-                      setConfirmAction({ open: true, course, action: "delete" })
-                    }
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate(`/app/admin/courses/${course.id}/review`)}
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                {course.status === "pending_review" ? "Review" : "View"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setConfirmAction({ open: true, course, action: "delete" })
+                }
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </Button>
             </div>
           </Card>
         ))}
