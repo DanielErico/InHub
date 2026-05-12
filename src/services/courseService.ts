@@ -420,13 +420,13 @@ export const courseService = {
         .in('id', tutorIds);
 
       (tutors || []).forEach((t: any) => {
-        tutorMap[t.id] = { full_name: t.full_name, avatar_url: t.avatar_url };
+        tutorMap[t.id] = { id: t.id, full_name: t.full_name, avatar_url: t.avatar_url };
       });
     }
 
     return courses.map((c: any) => ({
       ...c,
-      users: tutorMap[c.tutor_id] || { full_name: 'Unknown Tutor', avatar_url: null }
+      users: tutorMap[c.tutor_id] || { id: c.tutor_id, full_name: 'Unknown Tutor', avatar_url: null }
     }));
   },
 

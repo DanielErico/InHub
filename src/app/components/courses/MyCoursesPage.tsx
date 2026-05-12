@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { BookOpen, Play, Loader2, Library, Clock } from "lucide-react";
+import { BookOpen, Play, Loader2, Library, Clock, MessageSquare } from "lucide-react";
 import { courseService } from "../../../services/courseService";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 
@@ -145,10 +145,42 @@ export default function MyCoursesPage() {
                   </div>
                 </div>
 
-                {/* Button */}
-                <button className="w-full py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200">
-                  Continue Learning
-                </button>
+                {/* Buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/app/course/${course.id}/play`);
+                    }}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                  >
+                    Continue
+                  </button>
+                  {course.users?.id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate("/app/messages", {
+                          state: {
+                            initialContact: {
+                              id: course.users.id,
+                              full_name: course.users.full_name || "Tutor",
+                              avatar_url: course.users.avatar_url || null,
+                              role: "tutor",
+                              lastMessage: "",
+                              unreadCount: 0,
+                            },
+                          },
+                        });
+                      }}
+                      title={`Message ${course.users?.full_name || "Tutor"}`}
+                      className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 flex-shrink-0"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Message</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

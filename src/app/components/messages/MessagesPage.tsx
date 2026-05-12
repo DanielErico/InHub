@@ -108,7 +108,14 @@ export default function MessagesPage() {
       setInputText("");
       setImageFile(null);
     } catch (err: any) {
-      toast.error(err.message);
+      const msg: string = err.message || "";
+      if (msg.startsWith("Message blocked:")) {
+        // Strip the "Message blocked: " prefix and show a friendly warning
+        const reason = msg.replace(/^Message blocked:\s*/i, "");
+        toast.error(`🚫 Message not sent — ${reason}`, { duration: 6000 });
+      } else {
+        toast.error(msg || "Failed to send message. Please try again.");
+      }
     } finally {
       setIsSending(false);
       setUploadProgress(0);
