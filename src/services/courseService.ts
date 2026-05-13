@@ -545,12 +545,145 @@ export const courseService = {
     if (error) throw error;
   },
 
-  async deleteCourse(courseId: string) {
+  // ── Delete Course (Admin only) with notifications ──────────────────────────
+  async deleteCourse(courseId: string, adminReason: string) {
+    // 1. Fetch course info before deleting
+    const { data: course, error: courseErr } = await supabase
+      .from('courses')
+      .select('title, tutor_id')
+      .eq('id', courseId)
+      .single();
+    if (courseErr || !course) throw courseErr || new Error('Course not found');
+
+    // 2. Fetch all students who purchased this course
+    const { data: purchases } = await supabase
+      .from('purchases')
+      .select('user_id')
+      .eq('course_id', courseId)
+      .eq('status', 'success');
+
+    // 3. Build notifications for tutor + enrolled students
+    const notifications: any[] = [];
+
+    // Tutor notification
+    notifications.push({
+      user_id: course.tutor_id,
+      title: '🗑️ Your Course Was Deleted',
+      message: `Your course "${course.title}" has been permanently deleted by an admin. Reason: ${adminReason}`,
+      type: 'alert',
+      read: false,
+      link: '/app/tutor/content',
+    });
+
+    // Student notifications (enrolled only)
+    for (const p of purchases || []) {
+      notifications.push({
+        user_id: p.user_id,
+        title: '📚 Enrolled Course Removed',
+        message: `A course you enrolled in — "${course.title}" — has been removed from the platform. Reason: ${adminReason}. If you paid for this course, please contact support at support@inhub.com to request a refund.`,
+        type: 'alert',
+        read: false,
+        link: '/app/messages',
+      });
+    }
+
+    // 4. Send notifications
+    if (notifications.length > 0) {
+      await supabase.from('notifications').insert(notifications);
+    }
+
+    // 5. Delete the course
     const { error } = await supabase
       .from('courses')
       .delete()
       .eq('id', courseId);
     if (error) throw error;
+  },
+
+  // ── Tutor: Submit a deletion request ────────────────────────────────────────
+  async requestCourseDeletion(courseId: string, reason: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: course } = await supabase
+      .from('courses')
+      .select('title')
+      .eq('id', courseId)
+      .single();
+
+    if (!course) throw new Error('Course not found');
+
+    // Insert deletion request
+    const { error } = await supabase.from('course_deletion_requests').insert({
+      course_id: courseId,
+      tutor_id: user.id,
+      course_title: course.title,
+      tutor_reason: reason,
+      status: 'pending',
+    });
+    if (error) throw error;
+
+    // Notify all admins
+    const { data: admins } = await supabase.from('users').select('id').eq('role', 'admin');
+    const { data: tutor } = await supabase.from('users').select('full_name').eq('id', user.id).single();
+
+    if (admins && admins.length > 0) {
+      const adminNotifs = admins.map((a: any) => ({
+        user_id: a.id,
+        title: '🗂️ Course Deletion Request',
+        message: `Tutor ${tutor?.full_name || 'Unknown'} has requested deletion of "${course.title}". Reason: ${reason}`,
+        type: 'alert',
+        read: false,
+        link: '/app/admin/courses',
+      }));
+      await supabase.from('notifications').insert(adminNotifs);
+    }
+  },
+
+  // ── Admin: Fetch pending deletion requests ──────────────────────────────────
+  async getDeletionRequests() {
+    const { data, error } = await supabase
+      .from('course_deletion_requests')
+      .select(`
+        id, course_id, course_title, tutor_reason, status, created_at,
+        tutor:users!course_deletion_requests_tutor_id_fkey(id, full_name, avatar_url)
+      `)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  // ── Admin: Approve a deletion request ──────────────────────────────────────
+  async approveDeletionRequest(requestId: string, courseId: string, adminReason: string) {
+    // 1. Execute the actual deletion (sends notifications internally)
+    await this.deleteCourse(courseId, adminReason);
+
+    // 2. Update request status (course is gone so use a soft update fallback)
+    await supabase
+      .from('course_deletion_requests')
+      .update({ status: 'approved', admin_reason: adminReason, resolved_at: new Date().toISOString() })
+      .eq('id', requestId);
+  },
+
+  // ── Admin: Reject a deletion request ───────────────────────────────────────
+  async rejectDeletionRequest(requestId: string, tutorId: string, courseTitle: string, adminReason: string) {
+    // 1. Update request status
+    const { error } = await supabase
+      .from('course_deletion_requests')
+      .update({ status: 'rejected', admin_reason: adminReason, resolved_at: new Date().toISOString() })
+      .eq('id', requestId);
+    if (error) throw error;
+
+    // 2. Notify the tutor
+    await supabase.from('notifications').insert({
+      user_id: tutorId,
+      title: '❌ Deletion Request Rejected',
+      message: `Your request to delete "${courseTitle}" has been rejected. Reason: ${adminReason}. Your course remains active on the platform.`,
+      type: 'alert',
+      read: false,
+      link: '/app/tutor/content',
+    });
   },
 
 

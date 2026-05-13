@@ -2,25 +2,24 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   Plus,
-  MoreVertical,
   Upload,
   BookOpen,
   Users,
-  Star,
   Clock,
   ChevronDown,
   Eye,
   Edit3,
-  Trash2,
+  ClipboardX,
   TrendingUp,
   X,
   CheckCircle2,
   FileText,
-  PlayCircle,
   Filter,
   Loader2,
-  Video
+  Video,
+  AlertTriangle
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { useNavigate } from "react-router";
 import { courseService, Course } from "../../../services/courseService";
 
@@ -41,11 +40,17 @@ export default function TutorContentPage() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  
+
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const [showUploadModal, setShowUploadModal] = useState<UploadType>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  // Deletion request state
+  const [deletionTarget, setDeletionTarget] = useState<Course | null>(null);
+  const [deletionReason, setDeletionReason] = useState("");
+  const [deletionSubmitting, setDeletionSubmitting] = useState(false);
+
   const navigate = useNavigate();
 
   // Form State
@@ -115,17 +120,18 @@ export default function TutorContentPage() {
     }
   };
 
-  const handleDeleteCourse = async (courseId: string) => {
-    if (!window.confirm("Are you sure you want to delete this course? This action cannot be undone.")) return;
+  const handleRequestDeletion = async () => {
+    if (!deletionTarget || !deletionReason.trim()) return;
+    setDeletionSubmitting(true);
     try {
-      setLoading(true);
-      await courseService.deleteCourse(courseId);
-      alert("Course deleted successfully!");
-      fetchCourses();
-    } catch (error: any) {
-      console.error("Delete failed", error);
-      alert(`Delete failed: ${error.message}`);
-      setLoading(false);
+      await courseService.requestCourseDeletion(deletionTarget.id, deletionReason.trim());
+      toast.success(`Deletion request for "${deletionTarget.title}" submitted. An admin will review it shortly.`);
+      setDeletionTarget(null);
+      setDeletionReason("");
+    } catch (err: any) {
+      toast.error(`Failed to submit request: ${err.message}`);
+    } finally {
+      setDeletionSubmitting(false);
     }
   };
 
@@ -308,11 +314,11 @@ export default function TutorContentPage() {
                       <Edit3 className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={(e) => { e.stopPropagation(); handleDeleteCourse(course.id); }}
-                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Delete"
+                      onClick={(e) => { e.stopPropagation(); setDeletionTarget(course); }}
+                      className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                      title="Request Deletion"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <ClipboardX className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -474,6 +480,57 @@ export default function TutorContentPage() {
                     {showUploadModal === "course" ? "Create Course" : "Upload File"}
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Request Deletion Modal ── */}
+      {deletionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-card w-full max-w-md rounded-2xl shadow-xl border border-border p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="p-2 bg-amber-50 rounded-lg flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-foreground text-lg">Request Course Deletion</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  "{deletionTarget.title}"
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-4">
+              You cannot delete courses directly. Your request will be reviewed by an admin.
+              Please explain clearly why you want this course removed.
+            </p>
+
+            <textarea
+              value={deletionReason}
+              onChange={(e) => setDeletionReason(e.target.value)}
+              placeholder="Reason for requesting deletion..."
+              className="w-full border border-border rounded-xl p-3 text-sm min-h-[100px] resize-none outline-none focus:ring-2 focus:ring-amber-400 bg-muted mb-4"
+              maxLength={500}
+            />
+            <p className="text-[10px] text-muted-foreground/70 text-right -mt-3 mb-4">{deletionReason.length}/500</p>
+
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => { setDeletionTarget(null); setDeletionReason(""); }}
+                disabled={deletionSubmitting}
+                className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRequestDeletion}
+                disabled={!deletionReason.trim() || deletionSubmitting}
+                className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {deletionSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardX className="w-4 h-4" />}
+                Submit Request
               </button>
             </div>
           </div>
