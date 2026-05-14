@@ -1,7 +1,7 @@
 
-  # Learning Management Web App UI
+  # InHub
 
-  This is a code bundle for Learning Management Web App UI. The original project is available at https://www.figma.com/design/GQW74mE03bjfopSjrU8MUq/Learning-Management-Web-App-UI.
+  This is a code bundle for a Learning platform, an extension of Intern Connect
 
   ## Running the code
 
