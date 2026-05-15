@@ -51,7 +51,7 @@ export function HeroSection() {
               </span>
             </Link>
             <Link 
-              to="/login" 
+              to="#how-it-works" 
               className="inline-flex h-14 items-center justify-center rounded-xl border border-border bg-white px-8 font-semibold text-slate-600 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98]"
             >
               How It Works
