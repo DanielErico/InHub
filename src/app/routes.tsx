@@ -1,5 +1,6 @@
 import { createBrowserRouter, redirect } from "react-router";
 import { supabase } from "../lib/supabase";
+import LandingPage from "./components/landing/LandingPage";
 import AuthPage from "./components/auth/AuthPage";
 import AuthCallbackPage from "./components/auth/AuthCallbackPage";
 import Layout from "./components/layout/Layout";
@@ -131,6 +132,10 @@ async function adminAuthLoader() {
 export const router = createBrowserRouter([
   {
     path: "/",
+    Component: LandingPage,
+  },
+  {
+    path: "/login",
     Component: AuthPage,
   },
   {

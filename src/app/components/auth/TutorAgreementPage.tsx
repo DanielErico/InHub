@@ -209,7 +209,7 @@ export default function TutorAgreementPage() {
             By checking "I agree to the InternConnect Tutor Agreement" during registration, you confirm that you have read and agreed to all the terms above.
           </p>
           <Link
-            to="/"
+            to="/login"
             className="inline-flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl text-sm font-semibold transition-colors shadow-lg shadow-blue-200"
           >
             <ArrowLeft className="w-4 h-4" /> Back to Sign Up

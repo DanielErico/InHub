@@ -1,12 +1,22 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { useState, useEffect } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router";
 import { Eye, EyeOff, BookOpen, Sparkles, ArrowRight, CheckCircle2, GraduationCap, AlertCircle, RefreshCw, Shield, Mail } from "lucide-react";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { Logo } from "../ui/Logo";
 import { supabase } from "../../../lib/supabase";
 
 export default function AuthPage() {
-  const [mode, setMode] = useState<"login" | "signup" | "verify" | "forgot">("login");
+  const [searchParams] = useSearchParams();
+  const initialMode = (searchParams.get("mode") as "login" | "signup" | "verify" | "forgot") || "login";
+  const [mode, setMode] = useState<"login" | "signup" | "verify" | "forgot">(initialMode);
+
+  // Sync mode if query param changes
+  useEffect(() => {
+    const queryMode = searchParams.get("mode") as "login" | "signup" | "verify" | "forgot";
+    if (queryMode && (queryMode === "login" || queryMode === "signup")) {
+      setMode(queryMode);
+    }
+  }, [searchParams]);
   const [role, setRole] = useState<"student" | "tutor">("student");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
