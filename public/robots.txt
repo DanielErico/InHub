@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /auth/callback
+Allow: /tutor-agreement
+Disallow: /app/
+Disallow: /reset-password
+
+Sitemap: https://www.d-internconnect.com/sitemap.xml
