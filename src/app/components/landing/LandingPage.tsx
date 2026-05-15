@@ -5,6 +5,7 @@ import { HeroSection } from "./HeroSection";
 import { FeaturesSection } from "./FeaturesSection";
 import { FoundersSection } from "./FoundersSection";
 import { Footer } from "./Footer";
+import { HowItWorksSection } from "./HowItWorksSection";
 
 export default function LandingPage() {
   const { setTheme } = useTheme();
@@ -19,6 +20,7 @@ export default function LandingPage() {
       
       <main>
         <HeroSection />
+        <HowItWorksSection />
         <FeaturesSection />
         <FoundersSection />
       </main>
