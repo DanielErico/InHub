@@ -7,9 +7,7 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 w-full backdrop-blur-md bg-background/80 border-b border-border/40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="bg-brand-blue/10 p-2 rounded-xl group-hover:bg-brand-blue/20 transition-colors">
-            <Logo className="w-8 h-8 text-brand-blue" />
-          </div>
+          <Logo className="w-8 h-8 text-brand-blue" />
           <span className="text-2xl font-bold tracking-tight text-foreground">InHub</span>
         </Link>
         
