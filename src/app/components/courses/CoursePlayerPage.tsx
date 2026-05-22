@@ -33,6 +33,7 @@ import { courseService } from "../../../services/courseService";
 import { usePaystackPayment } from "react-paystack";
 import { useUserProfile } from "../../context/UserProfileContext";
 import { supabase } from "../../../lib/supabase";
+import toast from "react-hot-toast";
 const quickPrompts = [
   "Explain this lesson simply",
   "Summarize this topic",
@@ -214,9 +215,9 @@ export default function CoursePlayerPage() {
       setIsProcessingPayment(true);
       await courseService.recordPurchase(course.id, course.price, reference.reference);
       setHasPurchased(true);
-      alert("Payment successful! Course unlocked.");
+      toast.success("Payment successful! Course unlocked.");
     } catch (err: any) {
-      alert("Failed to record purchase. Please contact support.");
+      toast.error("Failed to record purchase. Please contact support.");
     } finally {
       setIsProcessingPayment(false);
     }

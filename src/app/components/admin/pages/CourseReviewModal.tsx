@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Loader2, Video, FileText, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { Textarea } from '../ui/textarea';
+import toast from 'react-hot-toast';
 
 interface CourseReviewModalProps {
   courseId: string | null;
@@ -48,7 +49,7 @@ export function CourseReviewModal({ courseId, onClose, onSuccess }: CourseReview
   const handleAction = async (action: 'published' | 'rejected' | 'needs_changes') => {
     if (!course) return;
     if ((action === 'rejected' || action === 'needs_changes') && !feedback.trim()) {
-      alert('Please provide feedback for the tutor.');
+      toast.error('Please provide feedback for the tutor.');
       return;
     }
 
@@ -72,7 +73,7 @@ export function CourseReviewModal({ courseId, onClose, onSuccess }: CourseReview
       onSuccess();
       onClose();
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     } finally {
       setSubmitting(false);
     }

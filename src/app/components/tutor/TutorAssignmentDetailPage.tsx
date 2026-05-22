@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { cbtService, Quiz, QuizScore, CBTQuestion } from "../../../services/cbtService";
 import { chatCompletion, MODELS } from "../../services/nvidia";
+import toast from "react-hot-toast";
 
 export default function TutorAssignmentDetailPage() {
   const { quizId } = useParams<{ quizId: string }>();
@@ -18,9 +19,6 @@ export default function TutorAssignmentDetailPage() {
   const [gradingId, setGradingId] = useState<string | null>(null);
   const [theoryScores, setTheoryScores] = useState<Record<string, Record<number, number>>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   useEffect(() => {
     if (!quizId) return;
@@ -67,9 +65,9 @@ Reply with ONLY a single integer number between 0 and ${q.points ?? 5} represent
         suggestions[i] = score;
       }
       setTheoryScores(p => ({ ...p, [sub.id]: suggestions }));
-      showToast("AI grading complete — review and adjust before saving.");
+      toast.success("AI grading complete — review and adjust before saving.");
     } catch (err: any) {
-      alert("AI grading failed: " + err.message);
+      toast.error("AI grading failed: " + err.message);
     } finally {
       setGradingId(null);
     }
@@ -85,9 +83,9 @@ Reply with ONLY a single integer number between 0 and ${q.points ?? 5} represent
       const total = mcqTotal + theoryTotal;
       await cbtService.updateTheoryScores(sub.id, scores, total, sub.max_score || quiz.questions.reduce((a, q) => a + (q.points ?? 1), 0), quiz.pass_mark_percent ?? 50);
       setSubmissions(p => p.map(s => s.id === sub.id ? { ...s, final_theory_scores: scores, total_score: total, passed: (total / (sub.max_score || 1)) * 100 >= (quiz.pass_mark_percent ?? 50) } : s));
-      showToast("Scores saved successfully!");
+      toast.success("Scores saved successfully!");
     } catch (err: any) {
-      alert("Failed to save: " + err.message);
+      toast.error("Failed to save: " + err.message);
     } finally {
       setSavingId(null);
     }
@@ -100,11 +98,6 @@ Reply with ONLY a single integer number between 0 and ${q.points ?? 5} represent
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-7 animate-in fade-in duration-500">
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white text-sm px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-4">
-          <CheckCircle2 className="w-4 h-4" /> {toast}
-        </div>
-      )}
 
       {/* Back + Header */}
       <button onClick={() => navigate("/app/tutor/assignments")} className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-sm transition-colors mb-2">

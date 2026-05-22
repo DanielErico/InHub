@@ -15,6 +15,7 @@ import {
   BookOpen,
   Loader2,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { useUserProfile } from "../../context/UserProfileContext";
 import { courseService } from "../../../services/courseService";
 import { formatDistanceToNow } from "date-fns";
@@ -253,7 +254,7 @@ export default function TutorDashboardPage() {
               </button>
               <button 
                 onClick={() => {
-                  alert("Upload simulation completed!");
+                  toast.success("Upload simulation completed!");
                   setShowUploadModal(null);
                 }}
                 className="px-5 py-2.5 rounded-xl font-medium text-sm text-white bg-blue-700 hover:bg-blue-800 transition-colors flex items-center gap-2 shadow-sm shadow-blue-200"

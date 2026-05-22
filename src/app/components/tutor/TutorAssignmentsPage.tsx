@@ -7,13 +7,13 @@ import {
 import { cbtService, Quiz } from "../../../services/cbtService";
 import ManualQuizBuilderModal from "./ManualQuizBuilderModal";
 import PublishQuizModal from "./PublishQuizModal";
+import toast from "react-hot-toast";
 
 export default function TutorAssignmentsPage() {
   const [quizzes, setQuizzes] = useState<(Quiz & { submissionCount?: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
   const [publishData, setPublishData] = useState<{ questions: any[]; title: string } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const load = async () => {
@@ -37,14 +37,10 @@ export default function TutorAssignmentsPage() {
 
   useEffect(() => { load(); }, []);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const onPublished = () => {
     setPublishData(null);
-    showToast("Assignment published successfully!");
+    toast.success("Assignment published successfully!");
     load();
   };
 
@@ -53,13 +49,6 @@ export default function TutorAssignmentsPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-7 animate-in fade-in duration-500">
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white text-sm px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-4">
-          <CheckCircle2 className="w-4 h-4" /> {toast}
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -129,9 +118,9 @@ export default function TutorAssignmentsPage() {
             try {
               await cbtService.saveCurriculum(title, JSON.stringify(questions, null, 2));
               setShowBuilder(false);
-              showToast("Draft saved to library!");
+              toast.success("Draft saved to library!");
             } catch (err: any) {
-              alert("Failed to save: " + err.message);
+              toast.error("Failed to save: " + err.message);
             }
           }}
         />

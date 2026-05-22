@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Save, Loader2, ChevronDown, ChevronUp, Upload } from "lucide-react";
+import toast from "react-hot-toast";
 import { courseService, Course, CourseModule } from "../../../services/courseService";
 
 interface Props { course: Course; onSaved: (updated: Course) => void; }
@@ -94,7 +95,7 @@ export function CourseInfoForm({ course, onSaved }: Props) {
       setTimeout(() => setSaved(false), 3000);
       onSaved({ ...course, level: level as any, language, target_audience: targetAudience, learning_outcomes: outcomes, requirements, modules, teaching_format: teachingFormats.join(","), total_duration: totalDuration, has_assignments: hasAssignments, assignment_count: assignmentCount, has_certificate: hasCertificate, certificate_requirements: certReqs, preview_video_url: previewUrl, thumbnail_url: finalThumbnailUrl });
     } catch (err: any) {
-      alert("Save failed: " + err.message);
+      toast.error("Save failed: " + err.message);
     } finally {
       setSaving(false);
       setUploadState("");

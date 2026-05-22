@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { courseService, Course, Lesson, Resource } from "../../../services/courseService";
 import { CourseInfoForm } from "./CourseInfoForm";
+import toast from "react-hot-toast";
 
 type UploadType = "video" | "pdf" | null;
 type TabId = "info" | "videos" | "pdfs";
@@ -59,37 +60,79 @@ export default function TutorCourseDetailsPage() {
       setResources(resourcesData);
     } catch (err) {
       console.error(err);
-      alert("Failed to load course details.");
+      toast.error("Failed to load course details.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteLesson = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this video?")) return;
-    try {
-      await courseService.deleteLesson(id);
-      setLessons(lessons.filter(l => l.id !== id));
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete lesson.");
-    }
+  const handleDeleteLesson = (id: string) => {
+    toast((t) => (
+      <div>
+        <p className="mb-3 font-medium text-sm">Are you sure you want to delete this video?</p>
+        <div className="flex gap-2 justify-end">
+          <button 
+            className="px-3 py-1.5 text-xs bg-muted hover:bg-slate-200 rounded-lg transition-colors"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button 
+            className="px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                await courseService.deleteLesson(id);
+                setLessons(prev => prev.filter(l => l.id !== id));
+                toast.success("Video deleted");
+              } catch (err) {
+                console.error(err);
+                toast.error("Failed to delete lesson.");
+              }
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
   };
 
-  const handleDeleteResource = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this PDF?")) return;
-    try {
-      await courseService.deleteResource(id);
-      setResources(resources.filter(r => r.id !== id));
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete resource.");
-    }
+  const handleDeleteResource = (id: string) => {
+    toast((t) => (
+      <div>
+        <p className="mb-3 font-medium text-sm">Are you sure you want to delete this PDF?</p>
+        <div className="flex gap-2 justify-end">
+          <button 
+            className="px-3 py-1.5 text-xs bg-muted hover:bg-slate-200 rounded-lg transition-colors"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button 
+            className="px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                await courseService.deleteResource(id);
+                setResources(prev => prev.filter(r => r.id !== id));
+                toast.success("Resource deleted");
+              } catch (err) {
+                console.error(err);
+                toast.error("Failed to delete resource.");
+              }
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
   };
 
   const handleUploadSubmit = async () => {
-    if (!uploadTitle) return alert("Title is required");
-    if (!file) return alert("File is required");
+    if (!uploadTitle) return toast.error("Title is required");
+    if (!file) return toast.error("File is required");
 
     try {
       setUploading(true);
@@ -99,12 +142,12 @@ export default function TutorCourseDetailsPage() {
       } else if (showUploadModal === "pdf") {
         await courseService.uploadPdf(courseId!, uploadTitle, file, setUploadProgress);
       }
-      alert(`${showUploadModal} uploaded successfully!`);
+      toast.success(`${showUploadModal === 'video' ? 'Video' : 'PDF'} uploaded successfully!`);
       handleModalClose();
       loadCourseData();
     } catch (err: any) {
       console.error(err);
-      alert(`Upload failed: ${err.message}`);
+      toast.error(`Upload failed: ${err.message}`);
     } finally {
       setUploading(false);
     }
@@ -117,28 +160,49 @@ export default function TutorCourseDetailsPage() {
     setUploadProgress(0);
   };
 
-  const handleSubmitForReview = async () => {
+  const handleSubmitForReview = () => {
     if (!course) return;
     const missing: string[] = [];
     if (!course.level) missing.push("Course Level");
     if (!course.target_audience) missing.push("Target Audience");
     if (!course.learning_outcomes?.filter(Boolean).length) missing.push("Learning Outcomes (at least 1)");
     if (missing.length) {
-      alert(`Please fill in the following in the Course Info tab before submitting:\n\n• ${missing.join('\n• ')}`);
+      toast.error(`Please fill in the following in the Course Info tab before submitting:\n\n• ${missing.join('\n• ')}`, { duration: 5000 });
       setActiveTab("info");
       return;
     }
-    if (!confirm("Submit this course for admin review? You won't be able to edit it until reviewed.")) return;
-    setSubmitting(true);
-    try {
-      await courseService.updateCourseStatus(course.id, 'pending_review');
-      setCourse(prev => prev ? { ...prev, status: 'pending_review' } : prev);
-      alert("Course submitted for review!");
-    } catch (err: any) {
-      alert("Failed to submit: " + err.message);
-    } finally {
-      setSubmitting(false);
-    }
+
+    toast((t) => (
+      <div>
+        <p className="mb-3 font-medium text-sm">Submit this course for admin review? You won't be able to edit it until reviewed.</p>
+        <div className="flex gap-2 justify-end">
+          <button 
+            className="px-3 py-1.5 text-xs bg-muted hover:bg-slate-200 rounded-lg transition-colors"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button 
+            className="px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              setSubmitting(true);
+              try {
+                await courseService.updateCourseStatus(course.id, 'pending_review');
+                setCourse(prev => prev ? { ...prev, status: 'pending_review' } : prev);
+                toast.success("Course submitted for review!");
+              } catch (err: any) {
+                toast.error("Failed to submit: " + err.message);
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            Submit
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
   };
 
   if (loading) {

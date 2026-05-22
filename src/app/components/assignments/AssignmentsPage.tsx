@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { cbtService, Quiz, CBTQuestion, StudentAnswer } from "../../../services/cbtService";
 import { useUserProfile } from "../../context/UserProfileContext";
+import toast from "react-hot-toast";
 
 function formatDueDate(dateStr: string | null): string {
   if (!dateStr) return "No deadline";
@@ -44,7 +45,7 @@ function CBTExam({ quiz, onSubmit }: { quiz: Quiz & { submission: any }; onSubmi
         answers: res.submission.answers || builtAnswers,
       });
     } catch (err: any) {
-      alert("Submission failed: " + err.message);
+      toast.error("Submission failed: " + err.message);
     } finally {
       setSubmitting(false);
     }

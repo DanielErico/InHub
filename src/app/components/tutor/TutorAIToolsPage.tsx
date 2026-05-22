@@ -22,6 +22,7 @@ import {
   Calendar,
   Trash2
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { chatCompletion, streamCompletion, MODELS, PROMPTS, ChatMessage } from "../../services/nvidia";
 import { cbtService, SavedCurriculum } from "../../../services/cbtService";
 import { courseService } from "../../../services/courseService";
@@ -135,9 +136,6 @@ export default function TutorAIToolsPage() {
   // Publish modal
   const [publishData, setPublishData] = useState<{ questions: any[]; title: string } | null>(null);
   const [showManualBuilder, setShowManualBuilder] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
   // Curriculum form
   const [currTopic, setCurrTopic] = useState("");
@@ -291,9 +289,9 @@ export default function TutorAIToolsPage() {
     try {
       setSavingAction(true);
       await cbtService.saveCurriculum(currTopic || quizTopic || "Untitled", output);
-      showToast("Saved to your Library!");
+      toast.success("Saved to your Library!");
     } catch (err: any) {
-      alert("Failed to save curriculum: " + err.message);
+      toast.error("Failed to save curriculum: " + err.message);
     } finally {
       setSavingAction(false);
     }
@@ -305,7 +303,7 @@ export default function TutorAIToolsPage() {
       const questionsData = JSON.parse(output);
       setPublishData({ questions: questionsData, title: quizTopic || "Quiz Assignment" });
     } catch {
-      alert("Failed to parse questions. Make sure the AI finished generating correctly.");
+      toast.error("Failed to parse questions. Make sure the AI finished generating correctly.");
     }
   };
 
@@ -315,7 +313,7 @@ export default function TutorAIToolsPage() {
       const data = await cbtService.getSavedCurriculums();
       setSavedCurriculums(data);
     } catch (err: any) {
-      alert("Failed to load library: " + err.message);
+      toast.error("Failed to load library: " + err.message);
     } finally {
       setLoadingLibrary(false);
     }
@@ -327,16 +325,37 @@ export default function TutorAIToolsPage() {
     }
   }, [showLibrary]);
 
-  const handleDeleteCurriculum = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteCurriculum = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Are you sure you want to delete this curriculum?")) return;
-    try {
-      await cbtService.deleteCurriculum(id);
-      setSavedCurriculums(prev => prev.filter(c => c.id !== id));
-      if (selectedCurriculum?.id === id) setSelectedCurriculum(null);
-    } catch (err: any) {
-      alert("Failed to delete: " + err.message);
-    }
+    toast((t) => (
+      <div>
+        <p className="mb-3 font-medium text-sm">Are you sure you want to delete this curriculum?</p>
+        <div className="flex gap-2 justify-end">
+          <button 
+            className="px-3 py-1.5 text-xs bg-muted hover:bg-slate-200 rounded-lg transition-colors"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button 
+            className="px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                await cbtService.deleteCurriculum(id);
+                setSavedCurriculums(prev => prev.filter(c => c.id !== id));
+                if (selectedCurriculum?.id === id) setSelectedCurriculum(null);
+                toast.success("Curriculum deleted");
+              } catch (err: any) {
+                toast.error("Failed to delete: " + err.message);
+              }
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
   };
 
   const generateInsights = useCallback(async () => {
@@ -863,12 +882,6 @@ export default function TutorAIToolsPage() {
           </div>
         </div>
       )}
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white text-sm px-5 py-3 rounded-2xl shadow-lg flex items-center gap-2 animate-in slide-in-from-bottom-4">
-          <CheckCircle2 className="w-4 h-4" /> {toast}
-        </div>
-      )}
 
       {/* Manual Builder Modal */}
       {showManualBuilder && (
@@ -882,8 +895,8 @@ export default function TutorAIToolsPage() {
             try {
               await cbtService.saveCurriculum(title, JSON.stringify(questions, null, 2));
               setShowManualBuilder(false);
-              showToast("Draft saved to library!");
-            } catch (err: any) { alert("Failed: " + err.message); }
+              toast.success("Draft saved to library!");
+            } catch (err: any) { toast.error("Failed: " + err.message); }
           }}
         />
       )}
@@ -896,7 +909,7 @@ export default function TutorAIToolsPage() {
           onClose={() => setPublishData(null)}
           onPublished={() => {
             setPublishData(null);
-            showToast("Assignment published successfully!");
+            toast.success("Assignment published successfully!");
           }}
         />
       )}

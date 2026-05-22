@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Loader2,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { courseService, scheduleService, ScheduleSession, Course } from "../../../services/courseService";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -145,7 +146,7 @@ export default function TutorSchedulePage() {
 
   const handleAddSession = async () => {
     if (!formData.title || !formData.course_id || !formData.date || !formData.time) {
-      alert("Please fill out all required fields (Title, Course, Date, Time).");
+      toast.error("Please fill out all required fields (Title, Course, Date, Time).");
       return;
     }
 
@@ -179,7 +180,7 @@ export default function TutorSchedulePage() {
       loadData();
     } catch (err) {
       console.error(err);
-      alert("Failed to save session.");
+      toast.error("Failed to save session.");
     } finally {
       setSaving(false);
     }

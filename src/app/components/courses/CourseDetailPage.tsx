@@ -11,6 +11,7 @@ import { supabase } from "../../../lib/supabase";
 import { usePaystackPayment } from "react-paystack";
 import { useUserProfile } from "../../context/UserProfileContext";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
+import toast from "react-hot-toast";
 
 interface TutorInfo {
   id: string;
@@ -108,7 +109,7 @@ export default function CourseDetailPage() {
       setHasPurchased(true);
       navigate(`/app/course/${courseId}/play`);
     } catch {
-      alert("Payment recorded but failed to update. Contact support.");
+      toast.error("Payment recorded but failed to update. Contact support.");
     } finally {
       setIsProcessingPayment(false);
     }

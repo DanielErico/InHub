@@ -86,7 +86,7 @@ export function CourseReviewPage() {
   const handleAction = async (action: 'published' | 'rejected' | 'needs_changes') => {
     if (!course) return;
     if ((action === 'rejected' || action === 'needs_changes') && !feedback.trim()) {
-      alert('Please provide feedback for the tutor.');
+      toast.error('Please provide feedback for the tutor.');
       return;
     }
 

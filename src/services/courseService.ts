@@ -640,6 +640,30 @@ export const courseService = {
     }
   },
 
+  // ── Tutor: Directly Delete Draft Course ─────────────────────────────────────
+  async deleteDraftCourse(courseId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    const { data: course, error: courseErr } = await supabase
+      .from('courses')
+      .select('status, tutor_id')
+      .eq('id', courseId)
+      .single();
+
+    if (courseErr || !course) throw courseErr || new Error('Course not found');
+    if (course.tutor_id !== user.id) throw new Error('Unauthorized: You are not the owner of this course.');
+    if (course.status !== 'draft') throw new Error('Only draft courses can be deleted directly. Please submit a deletion request instead.');
+
+    // Delete the course (will cascade delete related data if RLS allows)
+    const { error } = await supabase
+      .from('courses')
+      .delete()
+      .eq('id', courseId);
+      
+    if (error) throw error;
+  },
+
   // ── Admin: Fetch pending deletion requests ──────────────────────────────────
   async getDeletionRequests() {
     const { data, error } = await supabase

@@ -111,10 +111,10 @@ export default function TutorContentPage() {
     try {
       setUploading(true);
       await courseService.updateCourseStatus(courseId, 'pending_review');
-      alert("Course submitted for review!");
+      toast.success("Course submitted for review!");
       fetchCourses();
     } catch (error: any) {
-      alert(`Failed to submit: ${error.message}`);
+      toast.error(`Failed to submit: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -135,12 +135,27 @@ export default function TutorContentPage() {
     }
   };
 
+  const handleDirectDeletion = async () => {
+    if (!deletionTarget) return;
+    setDeletionSubmitting(true);
+    try {
+      await courseService.deleteDraftCourse(deletionTarget.id);
+      toast.success(`Draft course "${deletionTarget.title}" deleted successfully.`);
+      setDeletionTarget(null);
+      fetchCourses();
+    } catch (err: any) {
+      toast.error(`Failed to delete course: ${err.message}`);
+    } finally {
+      setDeletionSubmitting(false);
+    }
+  };
+
   const handleUploadSubmit = async () => {
-    if (!uploadTitle) return alert("Title is required");
+    if (!uploadTitle) return toast.error("Title is required");
     
     // For Course creation, file (thumbnail) is optional. For PDF/Video, file is required.
     if ((showUploadModal === "pdf" || showUploadModal === "video") && !file) {
-      return alert("Please select a file to upload");
+      return toast.error("Please select a file to upload");
     }
 
     try {
@@ -153,12 +168,12 @@ export default function TutorContentPage() {
         await courseService.uploadPdf(selectedCourseId, uploadTitle, file!);
       }
       
-      alert(`${showUploadModal} uploaded successfully!`);
+      toast.success(`${showUploadModal === "course" ? "Course" : showUploadModal === "video" ? "Video" : "PDF"} uploaded successfully!`);
       handleModalClose();
       fetchCourses(); // Refresh list to show new data
     } catch (error: any) {
       console.error("Upload failed", error);
-      alert(`Upload failed: ${error.message}`);
+      toast.error(`Upload failed: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -316,7 +331,7 @@ export default function TutorContentPage() {
                     <button 
                       onClick={(e) => { e.stopPropagation(); setDeletionTarget(course); }}
                       className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                      title="Request Deletion"
+                      title={course.status === 'draft' ? "Delete Course" : "Request Deletion"}
                     >
                       <ClipboardX className="w-4 h-4" />
                     </button>
@@ -486,7 +501,7 @@ export default function TutorContentPage() {
         </div>
       )}
 
-      {/* ── Request Deletion Modal ── */}
+      {/* ── Request Deletion / Direct Deletion Modal ── */}
       {deletionTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-card w-full max-w-md rounded-2xl shadow-xl border border-border p-6 animate-in zoom-in-95 duration-200">
@@ -495,26 +510,36 @@ export default function TutorContentPage() {
                 <AlertTriangle className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <h3 className="font-bold text-foreground text-lg">Request Course Deletion</h3>
+                <h3 className="font-bold text-foreground text-lg">
+                  {deletionTarget.status === 'draft' ? 'Delete Course' : 'Request Course Deletion'}
+                </h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   "{deletionTarget.title}"
                 </p>
               </div>
             </div>
 
-            <p className="text-sm text-muted-foreground mb-4">
-              You cannot delete courses directly. Your request will be reviewed by an admin.
-              Please explain clearly why you want this course removed.
-            </p>
+            {deletionTarget.status === 'draft' ? (
+              <p className="text-sm text-muted-foreground mb-4">
+                Are you sure you want to delete this draft course? This action cannot be undone.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground mb-4">
+                  You cannot delete submitted courses directly. Your request will be reviewed by an admin.
+                  Please explain clearly why you want this course removed.
+                </p>
 
-            <textarea
-              value={deletionReason}
-              onChange={(e) => setDeletionReason(e.target.value)}
-              placeholder="Reason for requesting deletion..."
-              className="w-full border border-border rounded-xl p-3 text-sm min-h-[100px] resize-none outline-none focus:ring-2 focus:ring-amber-400 bg-muted mb-4"
-              maxLength={500}
-            />
-            <p className="text-[10px] text-muted-foreground/70 text-right -mt-3 mb-4">{deletionReason.length}/500</p>
+                <textarea
+                  value={deletionReason}
+                  onChange={(e) => setDeletionReason(e.target.value)}
+                  placeholder="Reason for requesting deletion..."
+                  className="w-full border border-border rounded-xl p-3 text-sm min-h-[100px] resize-none outline-none focus:ring-2 focus:ring-amber-400 bg-muted mb-4"
+                  maxLength={500}
+                />
+                <p className="text-[10px] text-muted-foreground/70 text-right -mt-3 mb-4">{deletionReason.length}/500</p>
+              </>
+            )}
 
             <div className="flex gap-3 justify-end">
               <button
@@ -524,14 +549,25 @@ export default function TutorContentPage() {
               >
                 Cancel
               </button>
-              <button
-                onClick={handleRequestDeletion}
-                disabled={!deletionReason.trim() || deletionSubmitting}
-                className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {deletionSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardX className="w-4 h-4" />}
-                Submit Request
-              </button>
+              {deletionTarget.status === 'draft' ? (
+                <button
+                  onClick={handleDirectDeletion}
+                  disabled={deletionSubmitting}
+                  className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {deletionSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardX className="w-4 h-4" />}
+                  Delete
+                </button>
+              ) : (
+                <button
+                  onClick={handleRequestDeletion}
+                  disabled={!deletionReason.trim() || deletionSubmitting}
+                  className="px-4 py-2 rounded-xl text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {deletionSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardX className="w-4 h-4" />}
+                  Submit Request
+                </button>
+              )}
             </div>
           </div>
         </div>

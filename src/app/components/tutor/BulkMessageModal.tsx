@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Mail, X, Loader2, AlertTriangle } from "lucide-react";
+import toast from "react-hot-toast";
 import { messageService } from "../../../services/messageService";
 
 interface BulkMessageModalProps {
@@ -17,10 +18,10 @@ export default function BulkMessageModal({ onClose, studentsCount, studentIds }:
     setIsSending(true);
     try {
       await messageService.sendBulkMessage(studentIds, content);
-      alert("Bulk message sent successfully!");
+      toast.success("Bulk message sent successfully!");
       onClose();
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setIsSending(false);
     }
