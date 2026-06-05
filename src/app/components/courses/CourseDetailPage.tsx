@@ -129,32 +129,46 @@ export default function CourseDetailPage() {
   const modules = course.modules?.filter((m) => m.title) || [];
   const formats = course.teaching_format ? course.teaching_format.split(",") : [];
 
-  const EnrollButton = ({ className = "" }: { className?: string }) => (
-    hasPurchased ? (
+  const EnrollButton = ({ className = "" }: { className?: string }) => {
+    const handleAction = () => {
+      if (!profile) {
+        navigate(`/login?redirectTo=${encodeURIComponent(window.location.pathname)}`);
+        return;
+      }
+      if (hasPurchased) {
+        navigate(`/app/course/${courseId}/play`);
+      } else if (isFree) {
+        navigate(`/app/course/${courseId}/play`);
+      } else {
+        initializePayment({ onSuccess, onClose });
+      }
+    };
+
+    return hasPurchased ? (
       <button
-        onClick={() => navigate(`/app/course/${courseId}/play`)}
-        className={`flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition-colors shadow-lg ${className}`}
+        onClick={handleAction}
+        className={`flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-2xl transition-colors shadow-lg cursor-pointer ${className}`}
       >
         <Play className="w-5 h-5 fill-white" /> Go to Course
       </button>
     ) : isFree ? (
       <button
-        onClick={() => navigate(`/app/course/${courseId}/play`)}
-        className={`flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-2xl transition-colors shadow-lg ${className}`}
+        onClick={handleAction}
+        className={`flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-2xl transition-colors shadow-lg cursor-pointer ${className}`}
       >
         <Play className="w-5 h-5 fill-white" /> Start Free Course
       </button>
     ) : (
       <button
-        onClick={() => initializePayment({ onSuccess, onClose })}
+        onClick={handleAction}
         disabled={isProcessingPayment}
-        className={`flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-2xl transition-colors shadow-lg disabled:opacity-70 ${className}`}
+        className={`flex items-center justify-center gap-2 bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-2xl transition-colors shadow-lg disabled:opacity-70 cursor-pointer ${className}`}
       >
         {isProcessingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : <Lock className="w-5 h-5" />}
         Enroll — NGN {course.price?.toLocaleString()}
       </button>
-    )
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -172,10 +186,10 @@ export default function CourseDetailPage() {
         
         <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-10">
           <button
-            onClick={() => navigate("/app/courses")}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6 text-sm font-medium"
+            onClick={() => navigate(profile ? "/app/courses" : "/")}
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6 text-sm font-medium cursor-pointer"
           >
-            <ChevronLeft className="w-4 h-4" /> Browse Courses
+            <ChevronLeft className="w-4 h-4" /> {profile ? "Browse Courses" : "Back Home"}
           </button>
 
           <div className="flex flex-col lg:flex-row gap-10">

@@ -56,8 +56,12 @@ export default function AuthCallbackPage() {
 
       // Cleanup
       localStorage.removeItem("intendedRole");
+      const oauthRedirectTo = localStorage.getItem("oauthRedirectTo");
+      localStorage.removeItem("oauthRedirectTo");
 
-      if (currentRole === "admin") {
+      if (oauthRedirectTo) {
+        navigate(oauthRedirectTo, { replace: true });
+      } else if (currentRole === "admin") {
         navigate("/app/admin", { replace: true });
       } else if (currentRole === "tutor") {
         navigate("/app/tutor/dashboard", { replace: true });

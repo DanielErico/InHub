@@ -90,7 +90,12 @@ export default function AuthPage() {
             full_name: name,
             role,
           });
-          navigate(role === "tutor" ? "/app/tutor/dashboard" : "/app/dashboard");
+          const redirectTo = searchParams.get("redirectTo");
+          if (redirectTo) {
+            navigate(redirectTo);
+          } else {
+            navigate(role === "tutor" ? "/app/tutor/dashboard" : "/app/dashboard");
+          }
           return;
         }
 
@@ -115,7 +120,10 @@ export default function AuthPage() {
             .single();
 
           const userRole = profile?.role || role;
-          if (userRole?.toLowerCase() === "admin") {
+          const redirectTo = searchParams.get("redirectTo");
+          if (redirectTo) {
+            navigate(redirectTo);
+          } else if (userRole?.toLowerCase() === "admin") {
             navigate("/app/admin");
           } else {
             navigate(userRole === "tutor" ? "/app/tutor/dashboard" : "/app/dashboard");
@@ -282,6 +290,12 @@ export default function AuthPage() {
     setError(null);
     try {
       localStorage.setItem("intendedRole", role);
+      const redirectTo = searchParams.get("redirectTo");
+      if (redirectTo) {
+        localStorage.setItem("oauthRedirectTo", redirectTo);
+      } else {
+        localStorage.removeItem("oauthRedirectTo");
+      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {

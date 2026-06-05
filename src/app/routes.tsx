@@ -40,13 +40,18 @@ import { SettingsPage as AdminSettingsPage } from "./components/admin/pages/Sett
 import { SurveysPage as AdminSurveysPage } from "./components/admin/pages/SurveysPage";
 
 // Authentication loader - checks if user is authenticated
-async function authLoader() {
+async function authLoader({ request }: { request: Request }) {
   try {
     const {
       data: { session },
     } = await supabase.auth.getSession();
 
     if (!session) {
+      const url = new URL(request.url);
+      // Let guests view the course details page, but not play page
+      if (url.pathname.startsWith("/app/course/") && !url.pathname.endsWith("/play")) {
+        return null;
+      }
       return redirect("/");
     }
 

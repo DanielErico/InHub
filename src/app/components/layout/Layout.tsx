@@ -29,7 +29,7 @@ export default function Layout() {
 
   const pageTitle =
     pageTitles[location.pathname] ||
-    (location.pathname.startsWith("/app/course/") ? "Course Player" : "");
+    (location.pathname.startsWith("/app/course/") ? (profile ? "Course Player" : "Course Preview") : "");
 
   // Close sidebar on route change
   useEffect(() => {
@@ -46,12 +46,14 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-background overflow-hidden transition-colors duration-200">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:flex lg:w-64 xl:w-72 flex-col border-r border-border flex-shrink-0">
-        <Sidebar />
-      </div>
+      {profile && (
+        <div className="hidden lg:flex lg:w-64 xl:w-72 flex-col border-r border-border flex-shrink-0">
+          <Sidebar />
+        </div>
+      )}
 
       {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && (
+      {profile && sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div
             className="fixed inset-0 bg-black/40 backdrop-blur-sm"
@@ -80,30 +82,32 @@ export default function Layout() {
       </div>
 
       {/* Mobile Bottom Nav */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border z-30 safe-area-bottom">
-        <div className="flex items-center">
-          {mobileNavItems.map(({ to, icon: Icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
-                  isActive ? "text-blue-700 dark:text-blue-400" : "text-muted-foreground"
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <div className={`p-1 rounded-lg ${isActive ? "bg-blue-100 dark:bg-blue-900/30" : ""}`}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <span className="text-xs">{label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
+      {profile && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-background border-t border-border z-30 safe-area-bottom">
+          <div className="flex items-center">
+            {mobileNavItems.map(({ to, icon: Icon, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+                    isActive ? "text-blue-700 dark:text-blue-400" : "text-muted-foreground"
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <div className={`p-1 rounded-lg ${isActive ? "bg-blue-100 dark:bg-blue-900/30" : ""}`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs">{label}</span>
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

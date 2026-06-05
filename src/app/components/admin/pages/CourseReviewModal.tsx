@@ -4,9 +4,15 @@ import { courseService, Course, Lesson, Resource } from '../../../../services/co
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Loader2, Video, FileText, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
+import { Loader2, Video, FileText, CheckCircle, XCircle, AlertTriangle, Globe, Award, ClipboardList, ChevronDown, ChevronUp, Users, CheckCircle2, Clock, BarChart2 } from 'lucide-react';
 import { Textarea } from '../ui/textarea';
 import toast from 'react-hot-toast';
+
+const LEVEL_BADGE: Record<string, string> = {
+  beginner: "bg-emerald-100 text-emerald-700",
+  intermediate: "bg-amber-100 text-amber-700",
+  advanced: "bg-red-100 text-red-700",
+};
 
 interface CourseReviewModalProps {
   courseId: string | null;
@@ -22,6 +28,7 @@ export function CourseReviewModal({ courseId, onClose, onSuccess }: CourseReview
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  const [openModule, setOpenModule] = useState<number | null>(0);
 
   useEffect(() => {
     if (courseId) {
@@ -38,7 +45,11 @@ export function CourseReviewModal({ courseId, onClose, onSuccess }: CourseReview
       setLessons(l);
       const r = await courseService.getResources(courseId!);
       setResources(r);
-      if (l.length > 0) setActiveVideo(l[0].video_url);
+      if (l.length > 0) {
+        setActiveVideo(l[0].video_url);
+      } else if (c.preview_video_url) {
+        setActiveVideo(c.preview_video_url);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -98,13 +109,18 @@ export function CourseReviewModal({ courseId, onClose, onSuccess }: CourseReview
             {/* Left Column: Player & Info */}
             <div className="md:col-span-2 space-y-6">
               {/* Video Player */}
-              <div className="bg-black aspect-video rounded-xl overflow-hidden flex items-center justify-center">
+              <div className="bg-black aspect-video rounded-xl overflow-hidden flex items-center justify-center relative">
                 {activeVideo ? (
                   <video src={activeVideo} controls className="w-full h-full object-contain" />
                 ) : (
                   <div className="text-gray-400 flex flex-col items-center">
                     <Video className="w-12 h-12 mb-2 opacity-50" />
                     <p>Select a lesson to view</p>
+                  </div>
+                )}
+                {course && activeVideo === course.preview_video_url && (
+                  <div className="absolute top-3 left-3 bg-blue-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow">
+                    Course Preview Video
                   </div>
                 )}
               </div>
@@ -118,6 +134,137 @@ export function CourseReviewModal({ courseId, onClose, onSuccess }: CourseReview
                   </Badge>
                 </div>
                 <p className="text-gray-600 mt-2">{course.description || 'No description provided.'}</p>
+
+                {/* Extended Details Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs text-gray-600">
+                  {course.level && (
+                    <div>
+                      <p className="text-gray-400 font-medium mb-1 flex items-center gap-1"><BarChart2 className="w-3 h-3" /> Level</p>
+                      <span className={`inline-block font-semibold px-2 py-0.5 rounded capitalize ${LEVEL_BADGE[course.level] || 'bg-gray-200 text-gray-800'}`}>
+                        {course.level}
+                      </span>
+                    </div>
+                  )}
+                  {course.language && (
+                    <div>
+                      <p className="text-gray-400 font-medium mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> Language</p>
+                      <p className="font-semibold text-gray-800">{course.language}</p>
+                    </div>
+                  )}
+                  {course.total_duration && (
+                    <div>
+                      <p className="text-gray-400 font-medium mb-1 flex items-center gap-1"><Clock className="w-3 h-3" /> Duration</p>
+                      <p className="font-semibold text-gray-800">{course.total_duration}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-gray-400 font-medium mb-1 flex items-center gap-1"><ClipboardList className="w-3 h-3" /> Assignments</p>
+                    <p className="font-semibold text-gray-800">
+                      {course.has_assignments ? `Yes (${course.assignment_count || 0})` : 'No'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 font-medium mb-1 flex items-center gap-1"><Award className="w-3 h-3" /> Cert.</p>
+                    <p className="font-semibold text-gray-800">
+                      {course.has_certificate ? 'Platform Cert' : 'No'}
+                    </p>
+                  </div>
+                  {course.teaching_format && (
+                    <div className="col-span-2 sm:col-span-3">
+                      <p className="text-gray-400 font-medium mb-1">Teaching Format</p>
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {course.teaching_format.split(',').map((f, idx) => (
+                          <span key={idx} className="bg-white border border-gray-200 px-2 py-0.5 rounded text-[10px] text-gray-700">
+                            {f.trim()}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* What You'll Learn */}
+                {course.learning_outcomes && course.learning_outcomes.filter(Boolean).length > 0 && (
+                  <div className="mt-6 border-t border-gray-100 pt-6">
+                    <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2 mb-3">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" /> What You'll Learn
+                    </h3>
+                    <div className="grid sm:grid-cols-2 gap-2 text-xs">
+                      {course.learning_outcomes.filter(Boolean).map((o, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                          <span className="text-gray-700 leading-relaxed">{o}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Target Audience */}
+                {course.target_audience && (
+                  <div className="mt-6 border-t border-gray-100 pt-6 text-xs">
+                    <h3 className="font-semibold text-gray-900 text-sm mb-2 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-purple-500" /> Who Is This For?
+                    </h3>
+                    <p className="text-gray-700 leading-relaxed">{course.target_audience}</p>
+                  </div>
+                )}
+
+                {/* Requirements */}
+                {course.requirements && course.requirements.filter(Boolean).length > 0 && (
+                  <div className="mt-6 border-t border-gray-100 pt-6 text-xs">
+                    <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2 mb-2">
+                      <ClipboardList className="w-4 h-4 text-orange-500" /> Requirements
+                    </h3>
+                    <ul className="space-y-1.5">
+                      {course.requirements.filter(Boolean).map((r, i) => (
+                        <li key={i} className="flex items-start gap-2 text-gray-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-orange-400 mt-1.5 shrink-0" />
+                          <span>{r}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Structured Curriculum / Modules Accordion */}
+                {course.modules && course.modules.filter(m => m.title).length > 0 && (
+                  <div className="mt-6 border-t border-gray-100 pt-6">
+                    <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2 mb-3">
+                      <BookOpen className="w-4 h-4 text-blue-600" /> Structured Curriculum / Modules
+                    </h3>
+                    <div className="space-y-2">
+                      {course.modules.filter(m => m.title).map((mod, i) => (
+                        <div key={i} className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50/50 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setOpenModule(openModule === i ? null : i)}
+                            className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-gray-100/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 bg-blue-600 text-white rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0">M{i + 1}</span>
+                              <span className="font-semibold text-gray-800">{mod.title}</span>
+                              {mod.lessons?.length > 0 && (
+                                <span className="text-[10px] text-gray-400">({mod.lessons.length} text lessons)</span>
+                              )}
+                            </div>
+                            {openModule === i ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+                          </button>
+                          {openModule === i && mod.lessons?.length > 0 && (
+                            <div className="border-t border-gray-100 bg-white divide-y divide-gray-50">
+                              {mod.lessons.map((lesson, li) => (
+                                <div key={li} className="flex items-center gap-2 px-4 py-2">
+                                  <span className="text-[10px] text-gray-400 w-3 text-right shrink-0">{li + 1}.</span>
+                                  <span className="text-gray-600">{lesson}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
                 {/* Resources */}
                 {resources.length > 0 && (

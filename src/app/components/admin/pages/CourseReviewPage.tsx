@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { supabase } from '../../../../lib/supabase';
 import { courseService, Course, Lesson, Resource } from '../../../../services/courseService';
+import { emailService } from '../../../../services/emailService';
 import toast from 'react-hot-toast';
 import {
   Loader2, Video, FileText, CheckCircle, XCircle, AlertTriangle,
   ChevronLeft, User, Mail, Calendar, BookOpen, Tag, DollarSign,
-  Play, Clock, LayoutList, ShieldCheck, AlertCircle
+  Play, Clock, LayoutList, ShieldCheck, AlertCircle, Globe, Award,
+  ClipboardList, ChevronDown, ChevronUp, Users, CheckCircle2, BarChart2
 } from 'lucide-react';
 
 interface TutorProfile {
@@ -17,6 +19,12 @@ interface TutorProfile {
   created_at: string;
   courseCount?: number;
 }
+
+const LEVEL_BADGE: Record<string, string> = {
+  beginner: "bg-emerald-100 text-emerald-700",
+  intermediate: "bg-amber-100 text-amber-700",
+  advanced: "bg-red-100 text-red-700",
+};
 
 export function CourseReviewPage() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -30,6 +38,7 @@ export function CourseReviewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
+  const [openModule, setOpenModule] = useState<number | null>(0);
 
   useEffect(() => {
     if (courseId) fetchDetails();
@@ -53,12 +62,11 @@ export function CourseReviewPage() {
       if (c.tutor_id) {
         const { data: tutorData } = await supabase
           .from('users')
-          .select('id, full_name, avatar_url, created_at')
+          .select('id, full_name, email, avatar_url, created_at')
           .eq('id', c.tutor_id)
           .single();
 
         if (tutorData) {
-          // Get tutor's auth email
           const { data: authUser } = await supabase.auth.admin?.getUserById
             ? { data: null }
             : { data: null };
@@ -71,7 +79,6 @@ export function CourseReviewPage() {
 
           setTutor({
             ...tutorData,
-            email: '',
             courseCount: count ?? 0,
           });
         }
@@ -106,6 +113,17 @@ export function CourseReviewPage() {
           user_id: course.tutor_id,
           message: `🎉 Your course "${course.title}" has been approved and is now live!`
         });
+      }
+
+      // Send Email Notification
+      if (tutor && tutor.email) {
+        await emailService.sendCourseFeedbackEmail(
+          tutor.email,
+          tutor.full_name,
+          course.title,
+          actionLabel as 'approved' | 'rejected' | 'sent back for changes',
+          feedback
+        );
       }
 
       toast.success(`Course successfully ${actionLabel}!`);
@@ -262,10 +280,119 @@ export function CourseReviewPage() {
               </div>
             </div>
           )}
+
+          {/* What You'll Learn */}
+          {course.learning_outcomes && course.learning_outcomes.filter(Boolean).length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm p-6 space-y-4">
+              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" /> What You'll Learn
+              </h3>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {course.learning_outcomes.filter(Boolean).map((o, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+                    <p className="text-sm text-gray-700 leading-snug">{o}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Target Audience */}
+          {course.target_audience && (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm p-6">
+              <h3 className="font-bold text-gray-900 text-sm mb-3 flex items-center gap-2">
+                <Users className="w-4 h-4 text-purple-500" /> Who Is This For?
+              </h3>
+              <p className="text-sm text-gray-700 leading-relaxed">{course.target_audience}</p>
+            </div>
+          )}
+
+          {/* Requirements */}
+          {course.requirements && course.requirements.filter(Boolean).length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm p-6 space-y-3">
+              <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-orange-500" /> Requirements
+              </h3>
+              <ul className="space-y-2">
+                {course.requirements.filter(Boolean).map((r, i) => (
+                  <li key={i} className="flex items-start gap-3 text-sm text-gray-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400 mt-1.5 shrink-0" />
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Course Curriculum / Modules */}
+          {course.modules && course.modules.filter(m => m.title).length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-blue-600" /> Structured Curriculum / Modules ({course.modules.filter(m => m.title).length})
+                </h3>
+              </div>
+              <div className="p-4 space-y-2">
+                {course.modules.filter(m => m.title).map((mod, i) => (
+                  <div key={i} className="border border-gray-150 rounded-xl overflow-hidden bg-gray-50/50">
+                    <button
+                      onClick={() => setOpenModule(openModule === i ? null : i)}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-100/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-7 h-7 bg-blue-600 text-white rounded-lg flex items-center justify-center text-xs font-bold shrink-0">M{i + 1}</span>
+                        <span className="font-semibold text-sm text-gray-800">{mod.title}</span>
+                        {mod.lessons?.length > 0 && (
+                          <span className="text-xs text-gray-400">({mod.lessons.length} text lessons)</span>
+                        )}
+                      </div>
+                      {openModule === i ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                    </button>
+                    {openModule === i && mod.lessons?.length > 0 && (
+                      <div className="border-t border-gray-100 bg-white divide-y divide-gray-50">
+                        {mod.lessons.map((lesson, li) => (
+                          <div key={li} className="flex items-center gap-3 px-5 py-2.5">
+                            <span className="text-xs text-gray-400 w-4 text-right shrink-0">{li + 1}.</span>
+                            <span className="text-sm text-gray-600">{lesson}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* RIGHT: Course Meta + Tutor + Actions */}
         <div className="space-y-6">
+
+          {/* Course Preview Media Card */}
+          {(course.preview_video_url || course.thumbnail_url) && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100">
+                <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+                  <Video className="w-4 h-4 text-blue-600" /> Course Intro / Cover
+                </h3>
+              </div>
+              <div className="p-5">
+                {course.preview_video_url ? (
+                  <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-inner">
+                    <video src={course.preview_video_url} controls className="w-full h-full object-contain" />
+                  </div>
+                ) : course.thumbnail_url ? (
+                  <div className="aspect-video bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
+                    <img src={course.thumbnail_url} alt="Course Thumbnail" className="w-full h-full object-cover" />
+                  </div>
+                ) : null}
+                <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                  <span>{course.preview_video_url ? 'Intro Video' : 'Thumbnail Cover'}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Course Details Card */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -291,7 +418,65 @@ export function CourseReviewPage() {
                   </p>
                 </div>
               </div>
-              <div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                <div>
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><BarChart2 className="w-3 h-3" /> Level</p>
+                  {course.level ? (
+                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded capitalize ${LEVEL_BADGE[course.level] || 'bg-gray-100 text-gray-700'}`}>
+                      {course.level}
+                    </span>
+                  ) : (
+                    <p className="text-sm text-gray-500">—</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> Language</p>
+                  <p className="text-sm font-medium text-gray-700">{course.language || 'English'}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100">
+                <div>
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><Clock className="w-3 h-3" /> Duration</p>
+                  <p className="text-sm font-medium text-gray-700">{course.total_duration || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><Award className="w-3 h-3" /> Platform Cert.</p>
+                  <p className="text-sm font-medium text-gray-700">{course.has_certificate ? 'Included' : 'Not Included'}</p>
+                </div>
+              </div>
+
+              {course.teaching_format && (
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-xs text-gray-400 mb-1">Teaching Format</p>
+                  <div className="flex flex-wrap gap-1">
+                    {course.teaching_format.split(',').map((f, idx) => (
+                      <span key={idx} className="text-[11px] bg-gray-100 text-gray-800 px-2 py-0.5 rounded">
+                        {f.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1"><ClipboardList className="w-3 h-3" /> Assignments</p>
+                <p className="text-sm font-medium text-gray-700">
+                  {course.has_assignments ? `Includes Assignments (${course.assignment_count || 0})` : 'No Assignments'}
+                </p>
+              </div>
+
+              {course.certificate_requirements && (
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-xs text-gray-400 mb-1">Tutor Cert. Requirements</p>
+                  <p className="text-xs text-gray-600 italic bg-purple-50/50 p-2.5 rounded border border-purple-100">
+                    "{course.certificate_requirements}"
+                  </p>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-gray-100">
                 <p className="text-xs text-gray-400 mb-1">Description</p>
                 <p className="text-sm text-gray-600 leading-relaxed">
                   {course.description || <span className="italic text-gray-400">No description provided.</span>}
